@@ -1756,6 +1756,24 @@ export default function Home() {
     return { path, fillPath, coords };
   }, [chartData]);
 
+  // Format Dakika/Saniye
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Filtrelenmiş Katalog Ürünleri
+  const filteredCatalogProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchSearch = !productSearchQuery || 
+        (p.name && p.name.toLowerCase().includes(productSearchQuery.toLowerCase())) || 
+        (p.barcode && p.barcode.toLowerCase().includes(productSearchQuery.toLowerCase()));
+      const matchCat = productCategoryFilter === 'ALL' || p.category === productCategoryFilter;
+      const matchPurity = productPurityFilter === 'ALL' || p.purity === productPurityFilter;
+      return matchSearch && matchCat && matchPurity;
+    });
+  }, [products, productSearchQuery, productCategoryFilter, productPurityFilter]);
 
   // ================= GİRİŞ YAPILMAMIŞSA LOGIN EKRANI =================
   if (!token || !currentUser) {
@@ -1973,25 +1991,6 @@ export default function Home() {
       </div>
     );
   }
-
-  // Format Dakika/Saniye
-  const formatTimer = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Filtrelenmiş Katalog Ürünleri
-  const filteredCatalogProducts = useMemo(() => {
-    return products.filter(p => {
-      const matchSearch = !productSearchQuery || 
-        (p.name && p.name.toLowerCase().includes(productSearchQuery.toLowerCase())) || 
-        (p.barcode && p.barcode.toLowerCase().includes(productSearchQuery.toLowerCase()));
-      const matchCat = productCategoryFilter === 'ALL' || p.category === productCategoryFilter;
-      const matchPurity = productPurityFilter === 'ALL' || p.purity === productPurityFilter;
-      return matchSearch && matchCat && matchPurity;
-    });
-  }, [products, productSearchQuery, productCategoryFilter, productPurityFilter]);
 
   // ================= ANA UYGULAMA PANELİ =================
   return (
