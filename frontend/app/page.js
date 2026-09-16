@@ -287,6 +287,7 @@ export default function Home() {
   const [productSearchQuery, setProductSearchQuery] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('ALL');
   const [productPurityFilter, setProductPurityFilter] = useState('ALL');
+  const [goldPrice, setGoldPrice] = useState(3788.20);
 
   // Form Verileri
   const [newProduct, setNewProduct] = useState({

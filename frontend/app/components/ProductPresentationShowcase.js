@@ -899,7 +899,10 @@ export default function ProductPresentationShowcase({
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard.writeText(`https://sarraferdem.com/sertifika/${p.barcode}`);
+                const url = `https://sarraferdem.com/sertifika/${p.barcode}`;
+                if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(url).catch(() => {});
+                }
                 setCopiedLink(true);
                 setTimeout(() => setCopiedLink(false), 2000);
               }}
