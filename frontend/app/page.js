@@ -323,6 +323,7 @@ export default function Home() {
   const [newStaff, setNewStaff] = useState({ username: '', password: '', full_name: '', role: 'STAFF', branch_id: 1 });
   const [newCustomer, setNewCustomer] = useState({ full_name: '', phone: '', email: '', id_number: '', customer_type: 'Bireysel', address: '', notes: '' });
   const [newSlotData, setNewSlotData] = useState({ slot_number: '', label: '', slot_type: 'Askı', group_name: 'Ana Vitrin', device_id: '', ip_address: '192.168.1.', port: 80, tolerance_grams: 0.20 });
+  const [currentTimeStr, setCurrentTimeStr] = useState('');
 
   // Saat Döngüsü
   useEffect(() => {
