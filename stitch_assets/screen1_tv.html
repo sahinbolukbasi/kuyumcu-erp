@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"surface-container":"#1e1f25","on-primary-fixed-variant":"#574500","outline-variant":"#4d4635","surface-container-high":"#292a2f","surface-variant":"#34343a","on-secondary-fixed":"#251a00","tertiary-container":"#b0b2c1","outline":"#99907c","background":"#121318","primary-fixed-dim":"#e9c349","on-primary":"#3c2f00","secondary-fixed-dim":"#eec14b","secondary-container":"#b38b14","on-surface-variant":"#d0c5af","surface-tint":"#e9c349","primary-container":"#d4af37","on-tertiary":"#2d303c","surface-container-highest":"#34343a","on-secondary":"#3e2e00","error-container":"#93000a","on-secondary-container":"#362800","tertiary-fixed":"#e0e1f2","error":"#ffb4ab","surface-container-lowest":"#0d0e13","surface":"#121318","surface-bright":"#38393f","secondary":"#eec14b","on-error":"#690005","on-tertiary-container":"#424451","on-surface":"#e3e1e9","primary-fixed":"#ffe088","inverse-surface":"#e3e1e9","on-secondary-fixed-variant":"#5a4300","primary":"#f2ca50","on-tertiary-fixed-variant":"#434653","secondary-fixed":"#ffdf98","on-background":"#e3e1e9","tertiary":"#cccddd","on-tertiary-fixed":"#181b26","inverse-on-surface":"#2f3036","surface-container-low":"#1a1b21","surface-dim":"#121318","tertiary-fixed-dim":"#c4c6d5","on-error-container":"#ffdad6","on-primary-container":"#554300","on-primary-fixed":"#241a00","inverse-primary":"#735c00"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-xs":"0.25rem","space-lg":"1.5rem","gutter":"1.5rem","space-xl":"2.5rem","margin-mobile":"1rem","gutter-lg":"2rem","space-md":"1rem","margin":"2rem","space-sm":"0.5rem","space-2xl":"4rem","gutter-sm":"1rem","margin-desktop":"3.5rem"},"fontFamily":{"display-md-mobile":["Playfair Display"],"display-lg":["Playfair Display"],"label-sm":["Plus Jakarta Sans"],"display-lg-mobile":["Playfair Display"],"metric-display":["Plus Jakarta Sans"],"headline-md":["Playfair Display"],"label-md":["Plus Jakarta Sans"],"headline-sm":["Plus Jakarta Sans"],"body-sm":["Plus Jakarta Sans"],"label-lg":["Plus Jakarta Sans"],"headline-lg":["Playfair Display"],"display-md":["Playfair Display"],"body-lg":["Plus Jakarta Sans"],"body-md":["Plus Jakarta Sans"]},"fontSize":{"display-md-mobile":["28px",{"lineHeight":"36px","letterSpacing":"0em","fontWeight":"500"}],"display-lg":["56px",{"lineHeight":"68px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-sm":["10px",{"lineHeight":"14px","letterSpacing":"0.14em","fontWeight":"700"}],"display-lg-mobile":["36px",{"lineHeight":"44px","letterSpacing":"-0.01em","fontWeight":"600"}],"metric-display":["28px",{"lineHeight":"34px","letterSpacing":"-0.03em","fontWeight":"700"}],"headline-md":["24px",{"lineHeight":"32px","letterSpacing":"0.02em","fontWeight":"500"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.1em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"0.02em","fontWeight":"700"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.02em","fontWeight":"400"}],"label-lg":["14px",{"lineHeight":"20px","letterSpacing":"0.08em","fontWeight":"600"}],"headline-lg":["32px",{"lineHeight":"40px","letterSpacing":"0.01em","fontWeight":"600"}],"display-md":["40px",{"lineHeight":"50px","letterSpacing":"-0.01em","fontWeight":"500"}],"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"0.01em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0.01em","fontWeight":"400"}]}}}</script></head><body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen selection:bg-primary selection:text-on-primary"><header class="fixed top-0 left-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-2xl shadow-[0_4px_30px_rgba(0,0,0,0.6)]"><div class="h-20 w-full px-gutter-lg flex items-center justify-between gap-space-lg"><div class="flex items-center gap-space-md"><img alt="Brand logo. - Primary color: #d4af37
+- Font: playfairDisplay
+- Mode: dark
+- Roundness: rounded-sm
+" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WCeH2IVcJ8zZXzrDPBpbgtKAmrFcniorEBhxneqoPS8PpWu36N03VlH_cgKs9vxBqpjNw21iZTtNLJab-Ier61ZKGNl92BqMMUyIGl0YQ0IOqN_sh7KbYNHzkj-dAkuPss9VjJRxC2Z0B0XBg1dXCSn_OrlhPptqWywioro1Zlvdd7oF0aPN0JiSz_YAjelxBFp8kxPuZaAQqcz2Gy5XWjQIqP8QdjDpLVgn7nsNMIg4_3ptG2OEt_DYif"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm tracking-wider text-primary uppercase">SARRAF ERDEM</span><span class="font-label-sm text-label-sm text-outline uppercase">Mücevherat &amp; Akıllı Vitrin ERP</span></div></div><div class="hidden xl:flex items-center px-space-md py-space-xs rounded-full bg-surface-container-low"><div class="relative flex h-2 w-2 mr-space-sm"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span></div><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">CANLI VİTRİN IoT: 6/6 AKTİF (±0.01g) • BİST ALTIN PİYASASI CANLI</span></div><div class="flex items-center gap-space-sm"><a class="hidden lg:inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-primary hover:text-on-surface transition-colors" data-path="canli-kur-tv-fiyat-panosu" href="#"><span class="material-symbols-outlined text-base">tv</span><span class="font-label-md text-label-md">TV / Vitrin Kur Ekranı</span></a><button class="flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors" title="Sarı-Siyah / Sarı-Beyaz Modu Değiştir" type="button"><span class="material-symbols-outlined text-base">contrast</span><span class="hidden md:inline font-label-md text-label-md">Mod</span></button><button class="flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors" title="Siren Kontrol" type="button"><span class="material-symbols-outlined text-base text-primary">notifications_active</span><span class="hidden md:inline font-label-md text-label-md">Siren Açık</span></button><div class="flex items-center gap-space-sm pl-space-sm"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1X5ENWDAwqjQcDLGOxCpBbsU9U36mMOKyDw7Wr1Wa3WhwZua1L0Jnqvoy4YuEo1J45snoktfR4i5y2oGbo3j8oXc0uHRVvRPKqKxnDSOAWnogIahVXej3DHSPyEK1Z1ijhHtr02qtQQina5msdhr5QXD8Qgkq_PJTykkF1mjKadY-omCVlRqMrospDID33vEpJyB46LEXDsGWhptLtE7uhpvNaUhKtmUCtjytwkgLakMCwvhyBXmlenfuP7"/><div class="hidden md:flex flex-col text-left"><span class="font-label-md text-label-md text-on-surface">Erdem Sarraf</span><span class="font-label-sm text-label-sm text-primary">Yönetici</span></div></div></div></div><div class="w-full bg-surface-container-low"><div class="w-full px-gutter-lg"><nav class="flex items-center gap-space-xs py-space-xs overflow-x-auto" data-active-classes="text-on-primary-container bg-primary-container font-headline-sm text-label-lg rounded-lg"><a class="px-space-md py-space-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors whitespace-nowrap font-label-lg text-label-lg rounded-lg" data-path="canli-vitrin-aski-guvenligi" href="#">Canlı Vitrin &amp; Askı Güvenliği</a><a class="px-space-md py-space-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors whitespace-nowrap font-label-lg text-label-lg rounded-lg" data-path="canli-kur-tv-fiyat-panosu" href="#">Canlı Kur &amp; TV Fiyat Panosu</a><a class="px-space-md py-space-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors whitespace-nowrap font-label-lg text-label-lg rounded-lg" data-path="kasa-satis-gecmisi" href="#">Kasa &amp; Satış Geçmişi</a><a class="px-space-md py-space-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors whitespace-nowrap font-label-lg text-label-lg rounded-lg" data-path="iot-aski-sensor-ip-ayarlari" href="#">IoT Askı Sensör &amp; IP Ayarları</a><a class="px-space-md py-space-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors whitespace-nowrap font-label-lg text-label-lg rounded-lg" data-path="personel-performans-karnesi" href="#">Personel Performans Karnesi</a></nav></div></div></header><main class="w-full pt-28 bg-surface"><div class="flex flex-col w-full min-w-0 font-body-md" id="tv-board-root">
+<!-- Subtle specular aura -->
+<div class="relative w-full px-gutter-sm md:px-gutter-lg py-space-md max-w-[1780px] mx-auto flex flex-col gap-space-lg">
+<!-- Top Projection Utility Bar -->
+<div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md p-space-md rounded-xl bg-surface-container-low shadow-xl">
+<div class="flex items-center gap-space-md">
+<div class="flex items-center justify-center w-11 h-11 rounded-lg bg-surface-container-high text-primary shadow-sm">
+<span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">tv_gen</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-primary">VİTRİN &amp; MAĞAZA TV CANLI YAYINI</span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 text-primary font-label-sm text-[9px] uppercase tracking-wider">4K UHD UYUMLU</span>
+</div>
+<h1 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Kapalıçarşı &amp; Serbest Piyasa Canlı Altın/Döviz Panosu</h1>
+</div>
+</div>
+<!-- Controls: Theme Toggle & Stream Metadata -->
+<div class="flex flex-wrap items-center gap-space-sm w-full lg:w-auto justify-between lg:justify-end">
+<!-- Live Timestamp & Source -->
+<div class="flex items-center gap-space-sm bg-surface-container px-space-md py-space-xs rounded-lg">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+</span>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">İSTANBUL TSİ</span>
+<span class="font-label-md text-label-md text-on-surface font-semibold tracking-wider" id="live-clock">14:48:22</span>
+</div>
+<div class="h-6 w-px bg-surface-variant mx-1"></div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">KAYNAK</span>
+<span class="font-label-md text-label-md text-primary font-medium">BİST / IAR FIX</span>
+</div>
+</div>
+<!-- Mode Switcher: Sarı-Siyah (VIP Koyu) vs Sarı-Beyaz (Gündüz Mermer) -->
+<div class="flex items-center p-1 rounded-lg bg-surface-container-high shadow-inner">
+<button class="flex items-center gap-space-xs px-space-md py-1.5 rounded-md transition-all duration-200 bg-primary text-on-primary font-label-sm text-label-sm uppercase font-bold shadow-sm" id="btn-theme-dark">
+<span class="material-symbols-outlined text-sm">dark_mode</span>
+<span>Sarı-Siyah (Gece VIP)</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md py-1.5 rounded-md transition-all duration-200 text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm uppercase font-medium" id="btn-theme-light">
+<span class="material-symbols-outlined text-sm">wb_sunny</span>
+<span>Sarı-Beyaz (Gündüz)</span>
+</button>
+</div>
+<!-- Fullscreen Button -->
+<button class="flex items-center gap-space-xs px-space-md py-2 rounded-lg bg-surface-container hover:bg-surface-container-highest text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" id="fullscreen-btn">
+<span class="material-symbols-outlined text-base">fullscreen</span>
+<span class="hidden sm:inline">Tam Ekran</span>
+</button>
+</div>
+</div>
+<!-- Main TV Viewport Frame -->
+<div class="relative overflow-hidden rounded-2xl bg-surface-container-lowest p-space-md md:p-space-xl shadow-2xl flex flex-col gap-space-lg transition-colors duration-500" id="tv-board-canvas">
+<!-- Top Grand Header with Ambient Glow -->
+<div class="relative flex flex-col md:flex-row items-start md:items-end justify-between pb-space-lg gap-space-md">
+<div class="flex items-center gap-space-lg">
+<div class="w-16 h-16 rounded-xl bg-gradient-to-br from-primary via-secondary to-primary-container p-0.5 shadow-lg shadow-primary/20 flex items-center justify-center">
+<div class="w-full h-full bg-surface-container-lowest rounded-[10px] flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">diamond</span>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-sm text-label-sm uppercase tracking-[0.25em] text-primary">SARRAF ERDEM HAUTE JOAILLERIE</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-widest">KAPALIÇARŞI TOPTAN VE PERAKENDE</span>
+</div>
+<h2 class="font-display-md text-display-md text-on-surface tracking-tight leading-none mt-1">
+              CANLI ALTIN &amp; DÖVİZ BORSASI
+            </h2>
+</div>
+</div>
+<!-- Macro Global Spot Tickers (ONS & Dolar/Euro) -->
+<div class="flex items-center gap-space-sm sm:gap-space-md bg-surface-container-low px-space-lg py-space-sm rounded-xl self-stretch md:self-auto justify-between shadow-sm">
+<div class="flex flex-col text-left">
+<div class="flex items-center gap-1 text-on-surface-variant font-label-sm text-label-sm uppercase">
+<span class="material-symbols-outlined text-xs text-primary">public</span>
+              ONS (XAU/USD)
+            </div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-metric-display text-metric-display text-on-surface tracking-tight">$3,042.80</span>
+<span class="font-label-sm text-label-sm text-primary font-bold flex items-center">+0.68% <span class="material-symbols-outlined text-xs">arrow_upward</span></span>
+</div>
+</div>
+<div class="w-px h-8 bg-surface-variant"></div>
+<div class="flex flex-col text-left">
+<div class="flex items-center gap-1 text-on-surface-variant font-label-sm text-label-sm uppercase">
+<span class="material-symbols-outlined text-xs text-secondary">monetization_on</span>
+              USD / TRY
+            </div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-metric-display text-metric-display text-on-surface tracking-tight">38.140</span>
+<span class="font-label-sm text-label-sm text-primary font-bold flex items-center">+0.12% <span class="material-symbols-outlined text-xs">arrow_upward</span></span>
+</div>
+</div>
+<div class="w-px h-8 bg-surface-variant"></div>
+<div class="flex flex-col text-left">
+<div class="flex items-center gap-1 text-on-surface-variant font-label-sm text-label-sm uppercase">
+<span class="material-symbols-outlined text-xs text-secondary">euro</span>
+              EUR / TRY
+            </div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-metric-display text-metric-display text-on-surface tracking-tight">39.920</span>
+<span class="font-label-sm text-label-sm text-outline font-medium flex items-center">-0.04% <span class="material-symbols-outlined text-xs">arrow_downward</span></span>
+</div>
+</div>
+</div>
+</div>
+<!-- Hero Highlight Rates (Primary Luxury Grid: 3 Hero Columns) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<!-- Has Altın 24K (King Rate) -->
+<div class="relative overflow-hidden rounded-xl bg-gradient-to-b from-surface-container to-surface-container-low p-space-lg shadow-xl flex flex-col justify-between group">
+<div class="absolute -right-10 -bottom-10 w-44 h-44 rounded-full bg-primary/5 blur-2xl pointer-events-none"></div>
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-widest font-bold">24 AYAR SAFLIK .995</span>
+<h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Has Altın (Gram)</h3>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-primary/20 text-primary font-label-sm text-label-sm uppercase font-bold tracking-wider">
+              EN ÇOK İŞLEM
+            </span>
+</div>
+<div class="grid grid-cols-2 gap-space-md my-space-md pt-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container-lowest/60">
+<span class="font-label-sm text-label-sm uppercase text-outline tracking-wider">ALIŞ (TL)</span>
+<div class="font-display-md text-display-md text-on-surface font-bold tracking-tight mt-0.5">
+                3.742,<span class="text-headline-sm font-normal text-on-surface-variant">40</span>
+</div>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-lowest/60">
+<span class="font-label-sm text-label-sm uppercase text-primary tracking-wider font-semibold">SATIŞ (TL)</span>
+<div class="font-display-md text-display-md text-primary font-bold tracking-tight mt-0.5">
+                3.785,<span class="text-headline-sm font-normal text-secondary-fixed-dim">10</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm text-primary">trending_up</span>
+<span class="text-primary font-bold">+%0.84</span>
+<span class="text-outline">• Gün İçi En Yüksek: 3.792 ₺</span>
+</div>
+<span class="text-outline">10 sn önce güncellendi</span>
+</div>
+</div>
+<!-- 22 Ayar Bilezik Gramı -->
+<div class="relative overflow-hidden rounded-xl bg-gradient-to-b from-surface-container to-surface-container-low p-space-lg shadow-xl flex flex-col justify-between group">
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">toll</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-widest font-bold">22 AYAR .916 HESAP</span>
+<h3 class="font-headline-md text-headline-md text-on-surface font-semibold">22 Ayar Bilezik (Gram)</h3>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+              İŞÇİLİKSİZ
+            </span>
+</div>
+<div class="grid grid-cols-2 gap-space-md my-space-md pt-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container-lowest/60">
+<span class="font-label-sm text-label-sm uppercase text-outline tracking-wider">ALIŞ (TL)</span>
+<div class="font-display-md text-display-md text-on-surface font-bold tracking-tight mt-0.5">
+                3.428,<span class="text-headline-sm font-normal text-on-surface-variant">00</span>
+</div>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-lowest/60">
+<span class="font-label-sm text-label-sm uppercase text-primary tracking-wider font-semibold">SATIŞ (TL)</span>
+<div class="font-display-md text-display-md text-primary font-bold tracking-tight mt-0.5">
+                3.560,<span class="text-headline-sm font-normal text-secondary-fixed-dim">50</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm text-primary">trending_up</span>
+<span class="text-primary font-bold">+%0.72</span>
+<span class="text-outline">• Çeyrek Dönüşüm Katsayısı: 1.63</span>
+</div>
+<span class="text-outline">Anlık</span>
+</div>
+</div>
+<!-- Çeyrek Altın (Eski & Yeni) -->
+<div class="relative overflow-hidden rounded-xl bg-gradient-to-b from-surface-container to-surface-container-low p-space-lg shadow-xl flex flex-col justify-between group">
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-widest font-bold">DARPHANE BASKILI YENİ</span>
+<h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Çeyrek Altın</h3>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-secondary-container/30 text-secondary-fixed font-label-sm text-label-sm uppercase tracking-wider">
+              YENİ TARİH
+            </span>
+</div>
+<div class="grid grid-cols-2 gap-space-md my-space-md pt-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container-lowest/60">
+<span class="font-label-sm text-label-sm uppercase text-outline tracking-wider">ALIŞ (TL)</span>
+<div class="font-display-md text-display-md text-on-surface font-bold tracking-tight mt-0.5">
+                6.080,<span class="text-headline-sm font-normal text-on-surface-variant">00</span>
+</div>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-lowest/60">
+<span class="font-label-sm text-label-sm uppercase text-primary tracking-wider font-semibold">SATIŞ (TL)</span>
+<div class="font-display-md text-display-md text-primary font-bold tracking-tight mt-0.5">
+                6.185,<span class="text-headline-sm font-normal text-secondary-fixed-dim">00</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm text-primary">trending_up</span>
+<span class="text-primary font-bold">+%0.91</span>
+<span class="text-outline">• Eski Tarih: 6.130 ₺ Satış</span>
+</div>
+<span class="text-outline">Anlık</span>
+</div>
+</div>
+</div>
+<!-- Secondary High-Density Rates Matrix (Ziynet, Ata, Yarım, Hurda 18K/14K, Gümüş) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-sm">
+<!-- Yarım Altın -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">Yarım Ziynet Altın</span>
+<span class="text-primary font-semibold">+%0.88</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">12.160 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">12.370 ₺</span>
+</div>
+</div>
+</div>
+<!-- Tam Ziynet Altın -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">Tam Ziynet Altın</span>
+<span class="text-primary font-semibold">+%0.85</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">24.320 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">24.740 ₺</span>
+</div>
+</div>
+</div>
+<!-- Ata Lira (Cumhuriyet) -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">Cumhuriyet Ata Lira</span>
+<span class="text-primary font-semibold">+%0.95</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">25.010 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">25.420 ₺</span>
+</div>
+</div>
+</div>
+<!-- Gremse Altın (10'luk) -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">Gremse (2.5'luk Ziynet)</span>
+<span class="text-primary font-semibold">+%0.80</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">60.800 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">61.850 ₺</span>
+</div>
+</div>
+</div>
+<!-- 18 Ayar Hurda / İşçilik -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">18 Ayar Altın (Gram)</span>
+<span class="text-primary font-semibold">+%0.70</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">2.730 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">2.950 ₺</span>
+</div>
+</div>
+</div>
+<!-- 14 Ayar Hurda / Satış -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">14 Ayar Altın (Gram)</span>
+<span class="text-primary font-semibold">+%0.65</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">2.124 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">2.480 ₺</span>
+</div>
+</div>
+</div>
+<!-- Gümüş Gram .999 -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">Gümüş (Gram Has .999)</span>
+<span class="text-primary font-semibold">+%1.42</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">41,20 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">43,65 ₺</span>
+</div>
+</div>
+</div>
+<!-- Platin Gram -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors shadow-sm">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="uppercase tracking-wider">Platin (Gram Spot)</span>
+<span class="text-outline font-semibold">-%0.18</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-sm">
+<div>
+<span class="font-label-sm text-label-sm text-outline block">ALIŞ</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">1.210 ₺</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-primary block font-semibold">SATIŞ</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">1.285 ₺</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Featured Luxury Spotlight Banner: Günün Özel Fırsatı & Vitrin Eseri -->
+<div class="relative overflow-hidden rounded-xl bg-surface-container p-space-lg flex flex-col lg:flex-row items-stretch justify-between gap-space-lg shadow-xl">
+<div class="flex flex-col sm:flex-row items-start sm:items-center gap-space-lg flex-1">
+<div class="w-24 h-24 rounded-lg overflow-hidden bg-surface-container-highest shrink-0 shadow-md">
+<img class="w-full h-full object-cover" data-alt="Close up cinematic shot of a handcrafted 22 karat gold Trabzon hasir cuff bracelet displayed on black velvet under warm museum spot illumination, sparkling specular highlights, luxury jewelry editorial photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDM81_79j-LxZOvNe-2uG9NFgLv1Ysj1VpO2J08NjBxVFq7524m_h4E0ABG2GfnZ7mnR-3bY5BitFz5Avl4KavlDtU9GDee72-K45eDHrf7wwSDnsR1EdoiN2osqWem1eWKGtz5PwtdIV221trqCAGQNQ3KJ7cqo7SrAki5Df85lezHsTJDe5UnizLzQUeUySv8BGkkmB1Cnz7RoAXpHNyRZTbwvPuDk5eqYeeh39P4Xn08fmmWRNEI6w"/>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-0.5 rounded-sm bg-primary text-on-primary font-label-sm text-label-sm font-bold uppercase tracking-wider">GÜNÜN ÖZEL VİTRİN SEÇKİSİ</span>
+<span class="font-label-sm text-label-sm text-outline">SLOT #5 • ANLIK AĞIRLIK: 35.20g</span>
+</div>
+<h4 class="font-headline-lg text-headline-lg text-on-surface font-semibold mt-1">22 Ayar El Örmesi Trabzon Hasır İkili Kelepçe</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-0.5 max-w-2xl">
+              Özel atölye işçilik indirimiyle yatırım ve takı portföyü için hazır. Canlı has altın kuru üzerinden anlık güncellenen peşin fiyat garantisi.
+            </p>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end justify-center gap-space-xs bg-surface-container-low lg:bg-transparent p-space-md lg:p-0 rounded-lg">
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-outline">CANLI HESAPLANAN VİTRİN FİYATI</span>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-display-md text-display-md text-primary font-bold tracking-tight">106.400</span>
+<span class="font-headline-md text-headline-md text-primary">₺</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-primary">lock_clock</span>
+            Fiyat 60 saniye boyunca sabitlenmiştir
+          </span>
+</div>
+</div>
+<!-- Live IoT Showcase & Security Telemetry Ticker (Store-Front Trust Bar) -->
+<div class="flex flex-col md:flex-row items-center justify-between gap-space-md p-space-md rounded-xl bg-surface-container-low shadow-sm">
+<div class="flex flex-wrap items-center gap-space-md">
+<div class="flex items-center gap-space-xs">
+<span class="inline-flex h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface font-bold">AKILLI VİTRİN SENSÖR DURUMU:</span>
+</div>
+<div class="flex items-center gap-space-sm text-on-surface-variant font-label-md text-label-md">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface font-medium">6/6 Raf Aktif (±0.01g)</span>
+<span class="hidden sm:inline">•</span>
+<span>Son 1 Saatte 48 Misafir İncelendi</span>
+<span class="hidden sm:inline">•</span>
+<span class="text-primary font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">verified_user</span>
+              Tüm Eserler Sertifikalı &amp; Sigortalı
+            </span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm text-outline font-label-sm text-label-sm">
+<span>SARRAF ERDEM BİLGİ EKRANI V4.2</span>
+<span>•</span>
+<span>BİST ALTIN PİYASASI ÜYESİDİR</span>
+</div>
+</div>
+</div>
+<!-- Multi-Screen / TV Operator Floating Bar (For Store Manager Tablets) -->
+<div class="flex flex-wrap items-center justify-between gap-space-md p-space-md rounded-xl bg-surface-container shadow-md">
+<div class="flex items-center gap-space-sm text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-primary text-base">cast_connected</span>
+<span>Bu ekran şu anda <strong>Mağaza Ön Cam Vitrin TV (LG 75" 4K)</strong> ve <strong>Kasa Arkası VIP TV</strong> panolarına canlı yansıtılmaktadır.</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<button class="px-space-md py-1.5 rounded-md bg-surface-container-high hover:bg-surface-container-highest text-on-surface transition-colors font-label-sm text-label-sm uppercase font-semibold" onclick="window.print()">
+          Fiyat Çıktısı Al (A4 / Pos)
+        </button>
+<button class="flex items-center gap-1 px-space-md py-1.5 rounded-md bg-primary text-on-primary transition-opacity hover:opacity-95 font-label-sm text-label-sm uppercase font-bold shadow-sm" id="refresh-rates-btn">
+<span class="material-symbols-outlined text-sm">sync</span>
+          Verileri Şimdi Güncelle
+        </button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  (function() {
+    // Live Clock updater
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const clockEl = document.getElementById('live-clock');
+      if (clockEl) {
+        clockEl.textContent = `${hours}:${minutes}:${seconds}`;
+      }
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Theme Mode Switcher: Sarı-Siyah vs Sarı-Beyaz
+    const btnDark = document.getElementById('btn-theme-dark');
+    const btnLight = document.getElementById('btn-theme-light');
+    const tvCanvas = document.getElementById('tv-board-canvas');
+
+    if (btnDark && btnLight && tvCanvas) {
+      btnDark.addEventListener('click', () => {
+        // Switch to Sarı-Siyah (VIP Koyu Mod)
+        tvCanvas.classList.remove('bg-[#FBF9F4]', 'text-[#1E1F25]');
+        tvCanvas.classList.add('bg-surface-container-lowest', 'text-on-surface');
+        
+        btnDark.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded-md transition-all duration-200 bg-primary text-on-primary font-label-sm text-label-sm uppercase font-bold shadow-sm";
+        btnLight.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded-md transition-all duration-200 text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm uppercase font-medium";
+      });
+
+      btnLight.addEventListener('click', () => {
+        // Switch to Sarı-Beyaz (Gündüz / Aydınlık Butik Mod)
+        tvCanvas.classList.remove('bg-surface-container-lowest', 'text-on-surface');
+        tvCanvas.classList.add('bg-[#FBF9F4]', 'text-[#1E1F25]');
+        
+        btnLight.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded-md transition-all duration-200 bg-primary text-on-primary font-label-sm text-label-sm uppercase font-bold shadow-sm";
+        btnDark.className = "flex items-center gap-space-xs px-space-md py-1.5 rounded-md transition-all duration-200 text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm uppercase font-medium";
+      });
+    }
+
+    // Fullscreen toggle for TV projection
+    const fsBtn = document.getElementById('fullscreen-btn');
+    if (fsBtn) {
+      fsBtn.addEventListener('click', () => {
+        const root = document.getElementById('tv-board-canvas');
+        if (!document.fullscreenElement) {
+          root.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      });
+    }
+
+    // Refresh simulation micro-interaction
+    const refreshBtn = document.getElementById('refresh-rates-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        const icon = refreshBtn.querySelector('.material-symbols-outlined');
+        if (icon) {
+          icon.classList.add('animate-spin');
+          setTimeout(() => {
+            icon.classList.remove('animate-spin');
+          }, 800);
+        }
+      });
+    }
+  })();
+</script></main><footer class="w-full bg-surface-container-lowest mt-space-2xl"><div class="w-full px-gutter-lg py-space-lg flex flex-col md:flex-row items-center justify-between gap-space-md text-on-surface-variant font-label-sm text-label-sm"><span>© 2025 SARRAF ERDEM. Yüksek Güvenlikli IoT Mücevherat &amp; Kasa Otomasyonu.</span><div class="flex items-center gap-space-lg"><span class="flex items-center gap-space-xs"><span class="inline-block w-1.5 h-1.5 rounded-full bg-primary"></span>TELEMETRİ V3.4</span><span>GÜVENLİ ŞİFRELEME AES-256</span><span>İSTANBUL KUYUMCULAR ODASI VERİ MERKEZİ</span></div></div></footer></body></html>

@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kuyumcu_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=sqlite:////app/data/kuyumculuk.db
+    deploy:
+      resources:
+        limits:
+          memory: 250M
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://63.181.78.45:8000
+    container_name: kuyumcu_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://63.181.78.45:8000
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 400M

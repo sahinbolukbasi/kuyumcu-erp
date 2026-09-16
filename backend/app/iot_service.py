@@ -1,0 +1,186 @@
+import datetime
+import json
+import logging
+from typing import List, Dict, Any
+from fastapi import WebSocket
+from sqlalchemy.orm import Session
+from . import models
+
+logger = logging.getLogger("iot_service")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: Dict[str, Any]):
+        text_data = json.dumps(message, default=str)
+        dead_connections = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(text_data)
+            except Exception:
+                dead_connections.append(connection)
+        for dc in dead_connections:
+            self.disconnect(dc)
+
+manager = ConnectionManager()
+
+
+async def process_telemetry(db: Session, slot_number: int, current_weight: float, device_id: str = "DEVICE_01"):
+    """
+    IoT sensöründen gelen ağırlığı işler, alarm ve inceleme kontrollerini yapar.
+    """
+    slot = db.query(models.RackSlot).filter(models.RackSlot.slot_number == slot_number).first()
+    if not slot:
+        # Otomatik slot oluştur
+        slot = models.RackSlot(
+            slot_number=slot_number,
+            label=f"Askı #{slot_number}",
+            device_id=device_id,
+            expected_weight=0.0,
+            current_weight=current_weight,
+            status="EMPTY"
+        )
+        db.add(slot)
+        db.commit()
+        db.refresh(slot)
+
+    old_weight = slot.current_weight
+    slot.current_weight = round(current_weight, 2)
+    slot.updated_at = datetime.datetime.utcnow()
+
+    event_type = "WEIGHT_UPDATE"
+    alert_triggered = False
+    alert_info = None
+
+    product = slot.product
+
+    # Eğer askıda tanımlı bir ürün varsa:
+    if product and slot.expected_weight > 0:
+        diff = slot.expected_weight - slot.current_weight
+        tolerance = slot.tolerance_grams
+
+        # Durum 1: Ürün askıda tam duruyor (Fark tolerans içinde)
+        if abs(diff) <= tolerance:
+            # Eğer önceden incelemede veya alarmdaysa, ürün yerine kondu!
+            if slot.status in ["INSPECTION", "ALERT"]:
+                event_type = "PRODUCT_RETURNED"
+                # Açık inceleme logunu kapat
+                latest_insp = db.query(models.InspectionLog).filter(
+                    models.InspectionLog.product_id == product.id,
+                    models.InspectionLog.returned_at.is_(None)
+                ).order_by(models.InspectionLog.id.desc()).first()
+
+                if latest_insp:
+                    now = datetime.datetime.utcnow()
+                    latest_insp.returned_at = now
+                    delta = (now - latest_insp.lifted_at).total_seconds()
+                    latest_insp.duration_seconds = max(1, int(delta))
+                    product.total_inspection_seconds += latest_insp.duration_seconds
+
+            slot.status = "NORMAL"
+            slot.is_inspection_authorized = False
+
+        # Durum 2: Ağırlık belirgin şekilde eksildi (Ürün kaldırıldı veya eksildi)
+        elif diff > tolerance:
+            # Ürün askıdan kaldırılmış
+            if slot.is_inspection_authorized:
+                # Yetkili inceleme modu
+                if slot.status != "INSPECTION":
+                    slot.status = "INSPECTION"
+                    slot.last_lifted_at = datetime.datetime.utcnow()
+                    product.view_count += 1
+                    event_type = "INSPECTION_STARTED"
+                    # Log oluştur
+                    insp_log = models.InspectionLog(
+                        product_id=product.id,
+                        slot_id=slot.id,
+                        lifted_at=datetime.datetime.utcnow(),
+                        was_authorized=True
+                    )
+                    db.add(insp_log)
+            else:
+                # İZİNSİZ EKSİLME -> KRİTİK ALARM!
+                if slot.status != "ALERT":
+                    slot.status = "ALERT"
+                    slot.last_lifted_at = datetime.datetime.utcnow()
+                    product.view_count += 1
+                    event_type = "SECURITY_ALERT"
+                    alert_triggered = True
+
+                    # Güvenlik alarm kaydı oluştur
+                    alert = models.SecurityAlert(
+                        slot_id=slot.id,
+                        product_id=product.id,
+                        alert_type="UNAUTHORIZED_LIFT",
+                        message=f"DİKKAT: Askı #{slot.slot_number} üzerindeki {product.name} ({product.weight_grams}g) İZİNSİZ KALDIRILDI!",
+                        weight_lost=round(diff, 2),
+                        is_resolved=False
+                    )
+                    db.add(alert)
+                    db.flush()
+
+                    alert_info = {
+                        "alert_id": alert.id,
+                        "slot_id": slot.id,
+                        "slot_number": slot.slot_number,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "expected_weight": slot.expected_weight,
+                        "current_weight": slot.current_weight,
+                        "weight_lost": round(diff, 2),
+                        "message": alert.message,
+                        "time": alert.created_at.strftime("%H:%M:%S")
+                    }
+
+                    # İzinsiz inceleme logu
+                    insp_log = models.InspectionLog(
+                        product_id=product.id,
+                        slot_id=slot.id,
+                        lifted_at=datetime.datetime.utcnow(),
+                        was_authorized=False
+                    )
+                    db.add(insp_log)
+    else:
+        # Ürün bağlı değilse
+        if slot.current_weight <= 0.05:
+            slot.status = "EMPTY"
+        else:
+            slot.status = "NORMAL"
+
+    db.commit()
+    db.refresh(slot)
+
+    # Canlı WebSocket yayını
+    broadcast_data = {
+        "type": event_type,
+        "slot_number": slot.slot_number,
+        "slot_id": slot.id,
+        "status": slot.status,
+        "current_weight": slot.current_weight,
+        "expected_weight": slot.expected_weight,
+        "is_inspection_authorized": slot.is_inspection_authorized,
+        "product": {
+            "id": product.id,
+            "name": product.name,
+            "barcode": product.barcode,
+            "category": product.category,
+            "weight_grams": product.weight_grams,
+            "price": product.price,
+            "image_url": product.image_url,
+            "view_count": product.view_count
+        } if product else None,
+        "alert": alert_info,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+
+    await manager.broadcast(broadcast_data)
+    return broadcast_data

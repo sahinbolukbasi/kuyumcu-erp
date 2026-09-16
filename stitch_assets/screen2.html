@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="tr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sarraf Erdem - Akıllı Vitrin &amp; Mücevher ERP</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&amp;family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            gold: {
+              300: "#fde047",
+              400: "#facc15",
+              500: "#eab308",
+              600: "#d4af37",
+              700: "#b38b14",
+              800: "#854d0e",
+              900: "#554300"
+            },
+            surface: {
+              dark: "#0b0c10",
+              darkcard: "#12141c",
+              darkcardhigh: "#191c26",
+              light: "#f7f7f4",
+              lightcard: "#ffffff",
+              lightborder: "#e7dfcd"
+            }
+          },
+          fontFamily: {
+            cinzel: ["Cinzel", "serif"],
+            display: ["Playfair Display", "serif"],
+            sans: ["Plus Jakarta Sans", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .gold-gradient-text {
+      background: linear-gradient(135deg, #fff3b0 0%, #d4af37 45%, #aa7c11 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .gold-gradient-bg {
+      background: linear-gradient(135deg, #f3d05e 0%, #d4af37 55%, #a87910 100%);
+    }
+    .gold-border-glow {
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      box-shadow: 0 0 20px -5px rgba(212, 175, 55, 0.15);
+    }
+    .emerald-glow {
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 24px -6px rgba(16, 185, 129, 0.2);
+    }
+    .amber-glow {
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      box-shadow: 0 0 24px -6px rgba(245, 158, 11, 0.22);
+    }
+    .crimson-glow {
+      border: 1px solid rgba(239, 68, 68, 0.55);
+      box-shadow: 0 0 30px -4px rgba(239, 68, 68, 0.35);
+    }
+    html:not(.dark) body {
+      background-color: #f7f6f2;
+      background-image: radial-gradient(#e4dcce 0.85px, transparent 0.85px);
+      background-size: 20px 20px;
+    }
+  </style>
+</head>
+<body class="bg-surface-dark text-slate-100 font-sans antialiased min-h-screen selection:bg-gold-600 selection:text-black transition-colors duration-300">
+<!-- TOP TICKER BAR: BIST / Kapalıçarşı Altın & Döviz Canlı Akış -->
+<div class="w-full bg-[#08090d] border-b border-gold-600/20 py-1.5 px-4 overflow-hidden relative text-xs tracking-wider z-50">
+<div class="w-full max-w-[1700px] mx-auto flex items-center justify-between gap-4">
+<div class="flex items-center gap-2 text-gold-500 font-semibold uppercase text-[11px] shrink-0">
+<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+<span class="font-cinzel tracking-widest text-gold-400">Kapalıçarşı Borsa Canlı</span>
+</div>
+<div class="flex items-center gap-6 overflow-x-auto whitespace-nowrap scrollbar-none font-mono text-[11px] text-slate-300">
+<span class="flex items-center gap-1.5"><span class="text-slate-400">HAS ALTIN:</span> <strong class="text-gold-400 font-bold">₺3.024,50</strong> <span class="text-emerald-400 font-semibold">▲ %1.42</span></span>
+<span class="flex items-center gap-1.5"><span class="text-slate-400">22 AYAR:</span> <strong class="text-slate-200">₺2.765,80</strong> <span class="text-emerald-400 font-semibold">▲ %1.38</span></span>
+<span class="flex items-center gap-1.5"><span class="text-slate-400">ÇEYREK ALTIN:</span> <strong class="text-gold-400 font-bold">₺4.945,00</strong> <span class="text-emerald-400 font-semibold">▲ %0.95</span></span>
+<span class="flex items-center gap-1.5"><span class="text-slate-400">ONS ($):</span> <strong class="text-slate-200">$2.748,20</strong> <span class="text-rose-400 font-semibold">▼ %0.12</span></span>
+<span class="flex items-center gap-1.5"><span class="text-slate-400">USD/TRY:</span> <strong class="text-slate-200">34.42</strong> <span class="text-emerald-400">▲ %0.08</span></span>
+</div>
+<div class="hidden md:flex items-center gap-2 text-[11px] text-slate-400 shrink-0 font-mono">
+<span class="material-symbols-outlined text-xs text-gold-400">wifi_tethering</span>
+<span>LOAD-CELL FREKANS: 80Hz</span>
+</div>
+</div>
+</div>
+<!-- SUB-HEADER NAVIGATION CHIP BAR -->
+<div class="border-b border-gold-600/15 bg-[#0e1017]/95 px-4 sm:px-6">
+<div class="max-w-[1700px] mx-auto flex items-center justify-between py-2 gap-3 overflow-x-auto scrollbar-none">
+<nav class="flex items-center gap-1.5 text-xs font-semibold">
+<a class="px-3 py-1.5 rounded-lg bg-gold-600 text-black shadow font-bold flex items-center gap-1.5 whitespace-nowrap" href="#">
+<span class="material-symbols-outlined text-sm">scale</span>
+<span>Canlı Vitrin &amp; Askı Güvenliği</span>
+</a>
+<a class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-white/5 transition-all whitespace-nowrap flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-sm">tv</span>
+<span>Canlı Kur &amp; TV Fiyat Panosu</span>
+</a>
+<a class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-white/5 transition-all whitespace-nowrap flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-sm">point_of_sale</span>
+<span>Kasa &amp; Satış Geçmişi</span>
+</a>
+<a class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-white/5 transition-all whitespace-nowrap flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-sm">router</span>
+<span>IoT Sensör &amp; IP Dağıtımı</span>
+</a>
+<a class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-white/5 transition-all whitespace-nowrap flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-sm">badge</span>
+<span>Personel Performans Karnesi</span>
+</a>
+</nav>
+<div class="flex items-center gap-2 shrink-0">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold-600 text-black font-bold text-xs shadow hover:brightness-110 active:scale-95 transition-all" onclick="toggleQuickPOS()">
+<span class="material-symbols-outlined text-sm">point_of_sale</span>
+<span>Hızlı Kasa / POS</span>
+</button>
+<button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-darkcardhigh border border-gold-600/30 text-gold-300 font-semibold text-xs hover:bg-white/10 transition-all" onclick="recalibrateSensors()">
+<span class="material-symbols-outlined text-sm text-gold-400">scale</span>
+<span class="hidden sm:inline">Tüm Daraları Sıfırla</span>
+</button>
+</div>
+</div>
+</div>
+<!-- MAIN ASYMMETRICAL TACTICAL WORKSPACE -->
+<div class="max-w-[1700px] mx-auto px-4 sm:px-6 py-6">
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+<!-- ======================================================== -->
+<!-- LEFT COLUMN (~28%): MASTER TELEMETRY & COCKPIT CONTROL STRIP -->
+<!-- ======================================================== -->
+<aside class="xl:col-span-4 2xl:col-span-3 space-y-4 xl:sticky xl:top-4">
+<!-- Atelier Identity & Commander Card -->
+<div class="p-5 rounded-2xl bg-surface-darkcard border border-gold-600/30 shadow-xl relative overflow-hidden space-y-4">
+<div class="absolute -right-12 -top-12 w-36 h-36 bg-gold-600/10 rounded-full blur-2xl pointer-events-none"></div>
+<!-- Brand Row -->
+<div class="flex items-center justify-between pb-3 border-b border-white/5">
+<div class="flex items-center gap-3">
+<div class="p-1 rounded bg-black/50 border border-gold-600/30 shadow-inner">
+<img alt="SARRAF ERDEM Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WCeH2IVcJ8zZXzrDPBpbgtKAmrFcniorEBhxneqoPS8PpWu36N03VlH_cgKs9vxBqpjNw21iZTtNLJab-Ier61ZKGNl92BqMMUyIGl0YQ0IOqN_sh7KbYNHzkj-dAkuPss9VjJRxC2Z0B0XBg1dXCSn_OrlhPptqWywioro1Zlvdd7oF0aPN0JiSz_YAjelxBFp8kxPuZaAQqcz2Gy5XWjQIqP8QdjDpLVgn7nsNMIg4_3ptG2OEt_DYif"/>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-cinzel text-sm font-bold tracking-wider gold-gradient-text">SARRAF ERDEM</span>
+<span class="text-[9px] px-1 py-0.5 rounded bg-gold-600/15 border border-gold-500/30 text-gold-400 font-mono font-semibold">V3.4</span>
+</div>
+<span class="text-[10px] font-sans text-slate-400 tracking-wider uppercase block">Mücevher Butiği ERP</span>
+</div>
+</div>
+<!-- Theme Toggle -->
+<div class="flex items-center p-0.5 rounded-lg bg-black/50 border border-gold-600/30">
+<button class="px-2 py-1 rounded bg-gold-600 text-black font-semibold text-[11px]" id="themeDarkBtn" onclick="applyTheme('dark')" title="Sarı-Siyah VIP Lüks">
+<span class="material-symbols-outlined text-xs">nightlight</span>
+</button>
+<button class="px-2 py-1 rounded text-slate-300 hover:text-gold-400 font-semibold text-[11px]" id="themeLightBtn" onclick="applyTheme('light')" title="Sarı-Beyaz Mermer Lüks">
+<span class="material-symbols-outlined text-xs">wb_sunny</span>
+</button>
+</div>
+</div>
+<!-- Store Owner Profile Strip -->
+<div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/40 border border-white/5">
+<div class="flex items-center gap-3">
+<div class="relative">
+<img alt="Erdem Sarraf - Yönetici" class="w-11 h-11 rounded-full object-cover ring-2 ring-gold-500/50 shadow-md" src="https://lh3.googleusercontent.com/aida/AEtjO1X5ENWDAwqjQcDLGOxCpBbsU9U36mMOKyDw7Wr1Wa3WhwZua1L0Jnqvoy4YuEo1J45snoktfR4i5y2oGbo3j8oXc0uHRVvRPKqKxnDSOAWnogIahVXej3DHSPyEK1Z1ijhHtr02qtQQina5msdhr5QXD8Qgkq_PJTykkF1mjKadY-omCVlRqMrospDID33vEpJyB46LEXDsGWhptLtE7uhpvNaUhKtmUCtjytwkgLakMCwvhyBXmlenfuP7"/>
+<span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-black"></span>
+</div>
+<div>
+<span class="text-xs font-bold text-slate-200 tracking-wide font-cinzel block">Erdem Sarraf</span>
+<span class="text-[10px] text-gold-400 font-mono tracking-wider uppercase font-semibold">Mağaza Sahibi &amp; ERP</span>
+</div>
+</div>
+<!-- Siren Toggle Button -->
+<button class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-darkcard border border-gold-600/30 hover:border-gold-500 text-gold-400 hover:text-gold-300 text-[11px] font-semibold transition shadow-sm" id="sirenBtn" onclick="toggleSiren()" title="Vitrin Siren Alarmı">
+<span class="material-symbols-outlined text-sm text-rose-500 animate-pulse" id="sirenIcon">volume_up</span>
+<span class="font-mono text-[10px]" id="sirenText">Açık</span>
+</button>
+</div>
+<!-- IoT WebSocket Telemetry Status Gauge -->
+<div class="p-3 rounded-xl bg-gradient-to-br from-[#181a24] to-[#12141c] border border-gold-600/20 space-y-2">
+<div class="flex items-center justify-between text-[11px] font-mono">
+<div class="flex items-center gap-1.5">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+</span>
+<span class="text-slate-300 font-semibold">ESP32 MESH:</span>
+<span class="text-emerald-400 font-bold">6/6 ÇEVRİMİÇİ</span>
+</div>
+<span class="text-gold-400 font-bold">±0.005g DARA</span>
+</div>
+<div class="flex items-center justify-between text-[10px] text-slate-400 font-mono border-t border-white/5 pt-1.5">
+<span>24-BIT HX711 ADC</span>
+<span class="text-slate-300">TELEMETRİ AKTİF</span>
+</div>
+</div>
+</div>
+<!-- STACKED LUXURY METRIC TELEMETRY TILES -->
+<div class="space-y-3">
+<!-- Metric 1: Toplam Vitrin Değeri -->
+<div class="p-4 rounded-xl bg-surface-darkcard border border-gold-600/25 shadow-md relative overflow-hidden group hover:border-gold-500 transition-all">
+<div class="flex items-center justify-between text-slate-400 mb-1.5">
+<span class="text-[11px] uppercase tracking-wider font-semibold font-cinzel">Toplam Vitrin Değeri</span>
+<div class="w-7 h-7 rounded-lg bg-gold-600/15 border border-gold-500/30 flex items-center justify-center text-gold-400">
+<span class="material-symbols-outlined text-base">diamond</span>
+</div>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="text-2xl font-display font-bold gold-gradient-text tracking-tight">₺378.900</span>
+<span class="text-xs font-mono text-gold-500 font-bold">TRY</span>
+</div>
+<div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-white/5 pt-1.5 font-mono">
+<span class="text-emerald-400 font-semibold flex items-center gap-0.5">
+<span class="material-symbols-outlined text-xs">trending_up</span> +%1.82
+            </span>
+<span class="text-[10px] text-slate-400">BİST Canlı Kur Bazlı</span>
+</div>
+</div>
+<!-- Metric 2: Net Askı Gramajı -->
+<div class="p-4 rounded-xl bg-surface-darkcard border border-gold-600/25 shadow-md relative overflow-hidden group hover:border-gold-500 transition-all">
+<div class="flex items-center justify-between text-slate-400 mb-1.5">
+<span class="text-[11px] uppercase tracking-wider font-semibold font-cinzel">Net Askı Gramajı</span>
+<div class="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+<span class="material-symbols-outlined text-base">balance</span>
+</div>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="text-2xl font-mono font-bold text-white tracking-tight" id="totalRackWeight">108.35</span>
+<span class="text-xs font-bold text-gold-400">gram</span>
+</div>
+<div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-white/5 pt-1.5 font-mono">
+<span class="text-slate-300 font-medium">HX711 24-Bit ADC</span>
+<span class="text-gold-400 font-bold">Hata: ±0.003g</span>
+</div>
+</div>
+<!-- Metric 3: Aktif Askı Durumu -->
+<div class="p-4 rounded-xl bg-surface-darkcard border border-gold-600/25 shadow-md relative overflow-hidden group hover:border-gold-500 transition-all">
+<div class="flex items-center justify-between text-slate-400 mb-1.5">
+<span class="text-[11px] uppercase tracking-wider font-semibold font-cinzel">Aktif Askı Durumu</span>
+<div class="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+<span class="material-symbols-outlined text-base">hub</span>
+</div>
+</div>
+<div class="flex items-baseline justify-between">
+<span class="text-2xl font-mono font-bold text-white tracking-tight">6 Yuva</span>
+<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold font-mono">4 Vitrin / 1 Alarm</span>
+</div>
+<div class="mt-2.5">
+<div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden flex">
+<div class="bg-rose-500 h-full" style="width: 17%" title="1 Alarm"></div>
+<div class="bg-amber-400 h-full" style="width: 17%" title="1 İncelemede"></div>
+<div class="bg-emerald-500 h-full" style="width: 50%" title="3 Vitrinde"></div>
+<div class="bg-slate-600 h-full" style="width: 16%" title="1 Boş Askı"></div>
+</div>
+</div>
+</div>
+<!-- Metric 4: Günlük ERP Hasılatı -->
+<div class="p-4 rounded-xl bg-surface-darkcard border border-gold-600/25 shadow-md relative overflow-hidden group hover:border-gold-500 transition-all">
+<div class="flex items-center justify-between text-slate-400 mb-1.5">
+<span class="text-[11px] uppercase tracking-wider font-semibold font-cinzel">Günlük Kasa Ciro</span>
+<div class="w-7 h-7 rounded-lg bg-gold-600/15 border border-gold-500/30 flex items-center justify-center text-gold-400">
+<span class="material-symbols-outlined text-base">receipt_long</span>
+</div>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="text-2xl font-display font-bold text-white tracking-tight font-cinzel" id="dailyTotalRevenue">₺151.000</span>
+<span class="text-[11px] text-slate-400 font-mono">/ 4 Fiş</span>
+</div>
+<div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-white/5 pt-1.5 font-mono">
+<span class="text-slate-300">Son Fiş: 18:24</span>
+<span class="text-gold-400">Nakit / Altın</span>
+</div>
+</div>
+</div>
+<!-- TACTICAL TEST CONTROLLER HUD -->
+<div class="p-4 rounded-xl bg-surface-darkcardhigh border border-gold-600/30 space-y-2.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5 text-xs font-bold text-white font-cinzel">
+<span class="material-symbols-outlined text-base text-gold-400">developer_board</span>
+<span>ESP32 &amp; Yük Hücresi Test Masası</span>
+</div>
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono border border-emerald-500/30">CANLI SİMÜLASYON</span>
+</div>
+<p class="text-[11px] text-slate-400 leading-snug">Vitrin sensörlerini tetikleyin, hırsızlık alarmı veya müşteri inceleme süreçlerini test edin.</p>
+<div class="space-y-1.5 pt-1">
+<button class="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-300 font-semibold text-xs tracking-tight transition-all active:scale-95 shadow" onclick="triggerAlarmSlot1()">
+<span class="material-symbols-outlined text-sm text-rose-400">crisis_alert</span>
+<span>🚨 Hırsızlık Alarmı (-28.60g)</span>
+</button>
+<button class="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/50 text-amber-300 font-semibold text-xs tracking-tight transition-all active:scale-95 shadow" onclick="triggerInspectSlot2()">
+<span class="material-symbols-outlined text-sm text-amber-400">pan_tool</span>
+<span>🖐️ Müşteri İnceleme Başlat</span>
+</button>
+<button class="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-gold-600/30 text-gold-300 font-semibold text-xs tracking-tight transition-all" onclick="recalibrateSensors()">
+<span class="material-symbols-outlined text-sm">sync</span>
+<span>🔄 Sensör Kalibrasyonu (±0.00g)</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- ======================================================== -->
+<!-- RIGHT AREA (~72%): ARCHITECTURAL SHOWCASE COUNTER MATRIX -->
+<!-- ======================================================== -->
+<main class="xl:col-span-8 2xl:col-span-9 space-y-6">
+<!-- TOP HERO EMERGENCY TELEMETRY COMMAND BANNER (SLOT #1 INCIDENT) -->
+<section class="rounded-2xl bg-gradient-to-r from-rose-950/90 via-[#260f16] to-[#161420] border-2 border-rose-500/60 p-5 shadow-2xl relative overflow-hidden" id="heroEmergencyBanner">
+<div class="absolute -right-20 -bottom-20 w-64 h-64 bg-rose-600/20 rounded-full blur-3xl pointer-events-none"></div>
+<div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
+<!-- Left: Urgent Warning Title & Identity -->
+<div class="space-y-1.5">
+<div class="flex flex-wrap items-center gap-2">
+<span class="flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-rose-600 text-white uppercase tracking-wider animate-bounce shadow-md">
+<span class="material-symbols-outlined text-sm">e911_emergency</span>
+<span>İZİNSİZ MÜCEVHER KAYBI TESPİT EDİLDİ!</span>
+</span>
+<span class="text-[11px] font-mono text-rose-300 font-semibold bg-black/40 px-2 py-0.5 rounded border border-rose-500/30">
+                SLOT #1 • Vitrin Ön Sıra - Sol Askı
+              </span>
+<span class="text-[11px] font-mono text-slate-300">IP: 192.168.1.101</span>
+</div>
+<h2 class="text-xl sm:text-2xl font-display font-bold text-white tracking-tight">
+              22 Ayar Trabzon Hasırı Bilezik
+              <span class="text-rose-400 font-mono text-lg font-bold ml-2">[-28.60g Kayıp]</span>
+</h2>
+<div class="flex flex-wrap items-center gap-3 text-xs text-slate-300 font-mono">
+<span class="flex items-center gap-1 text-rose-300">
+<span class="material-symbols-outlined text-sm">alarm</span>
+                Alarm Süresi: <strong class="underline font-bold text-rose-200" id="slot1Timer">00:24 sn</strong>
+</span>
+<span>•</span>
+<span class="text-gold-400 font-bold">Kayıp Tutar: ₺86.500</span>
+<span>•</span>
+<span class="text-slate-400">HX711 Dara: ±0.005g</span>
+</div>
+</div>
+<!-- Right: Direct Tactical Incident Resolvers -->
+<div class="flex flex-wrap items-center gap-2.5 shrink-0 w-full lg:w-auto">
+<button class="flex-1 lg:flex-initial flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-surface-darkcardhigh hover:bg-white/10 border border-white/20 text-slate-200 text-xs font-semibold transition-all shadow" onclick="resolveAlarmSlot1()">
+<span class="material-symbols-outlined text-sm text-emerald-400">notifications_off</span>
+<span>Alarmı Sustur</span>
+</button>
+<button class="flex-1 lg:flex-initial flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl gold-gradient-bg text-black font-bold text-xs shadow-lg hover:brightness-110 active:scale-95 transition-all uppercase tracking-wider" onclick="openInstantSale('22 Ayar Trabzon Hasırı Altın Bilezik', 28.60, 86500, 1)">
+<span class="material-symbols-outlined text-base">shopping_cart_checkout</span>
+<span>Satışa Dönüştür</span>
+</button>
+</div>
+</div>
+</section>
+<!-- SHOWCASE ARCHITECTURAL BAY: PRIMARY ACTIVE FOCUS BAYS (SLOT #1 & SLOT #2) -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-gold-400"></span>
+<h3 class="text-sm font-bold text-white uppercase tracking-wider font-cinzel">Ön Teşhir Masası (Öncelikli Gözlem Bölgesi)</h3>
+</div>
+<span class="text-[11px] font-mono text-gold-400">MİKRO LOAD-CELL TELEMETRİ 80Hz</span>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+<!-- SLOT #1: CRITICAL ALARM STATE CARD -->
+<div class="flex flex-col rounded-2xl bg-surface-darkcard crimson-glow overflow-hidden transition-all duration-300 relative shadow-2xl" id="slot1Card">
+<!-- Top Status Bar -->
+<div class="p-3.5 bg-rose-950/80 border-b border-rose-500/40 flex items-center justify-between" id="slot1TopBar">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-rose-600 text-white shadow-sm">SLOT #1</span>
+<div class="flex flex-col">
+<span class="text-xs font-bold text-white tracking-wide">Vitrin Ön Sıra - Sol Askı</span>
+<span class="text-[10px] font-mono text-rose-300">IP: 192.168.1.101 • RSSI: -42dBm</span>
+</div>
+</div>
+<span class="flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-rose-600 text-white uppercase tracking-wider animate-bounce shadow-md" id="slot1Badge">
+<span class="material-symbols-outlined text-sm">e911_emergency</span>
+<span>İZİNSİZ KAYIP!</span>
+</span>
+</div>
+<!-- Content -->
+<div class="p-5 flex flex-col flex-1 gap-4">
+<!-- Product Row -->
+<div class="flex items-start gap-3.5">
+<div class="w-24 h-24 rounded-xl overflow-hidden bg-black/60 border border-rose-500/40 shrink-0 relative shadow-inner">
+<img alt="22 Ayar Trabzon Hasır Altın Bilezik" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsAAVqp-Lql4VX2PVqNOmbRVsyEA2T9NDG8PvJhxmMvKgAz_QkYP1LYVgIXP4fijrxXyk59qPncjVPTOYiRwH8ZVe93O8yx4PHL-yoS856nVcTsRwv-eoMuagNhBGYKcgON2fWaxwwmi7sexZgHmctoKqZHDeg61At33BXCFxD9ctI8DrUynLi90iixiGdCZ21kZiRGMjg-ZV2DVaFWxfh-ATzbpoaM9FQZm_Msi_sXhelmJl2OOYODg"/>
+<span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono font-bold text-gold-400 border border-gold-500/40">22K</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<div class="flex items-center gap-1.5">
+<span class="text-[10px] px-1.5 py-0.5 rounded bg-gold-600/20 text-gold-400 font-mono font-semibold border border-gold-600/30">Trabzon Hasır</span>
+<span class="text-[10px] text-slate-400 font-mono">KYM-2024-001</span>
+</div>
+<h4 class="text-base font-bold text-white mt-1 leading-snug truncate font-cinzel">22 Ayar Trabzon Hasırı Bilezik</h4>
+<div class="text-2xl font-display font-bold text-gold-400 mt-1">₺86.500</div>
+</div>
+</div>
+<!-- Weight Telemetry Box -->
+<div class="grid grid-cols-2 gap-2.5 p-3.5 rounded-xl bg-black/50 border border-white/5">
+<div>
+<span class="text-[10px] uppercase font-mono text-slate-400 tracking-wider">Okunan Ağırlık</span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="text-3xl font-mono font-bold text-rose-500" id="slot1WeightDisplay">0.00</span>
+<span class="text-sm text-rose-400 font-bold">g</span>
+</div>
+<span class="text-[10px] text-rose-400 font-mono font-bold block mt-0.5" id="slot1DiffText">FARK: -28.60g (KAYIP)</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-mono text-slate-400 tracking-wider">Beklenen Değer</span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="text-3xl font-mono font-bold text-slate-200">28.60</span>
+<span class="text-sm text-slate-400">g</span>
+</div>
+<span class="text-[10px] text-slate-400 block mt-0.5">HX711 Dara: ±0.005g</span>
+</div>
+</div>
+<!-- Info & Actions -->
+<div class="flex items-center justify-between text-xs border-t border-white/5 pt-2">
+<span class="text-rose-400 font-semibold flex items-center gap-1 font-mono">
+<span class="material-symbols-outlined text-sm">alarm</span>
+                  Alarm: <strong class="underline">00:24 sn</strong>
+</span>
+<span class="text-slate-400 font-mono text-[11px]">Toplam İnceleme: 14 kez</span>
+</div>
+<div class="grid grid-cols-2 gap-2.5 mt-auto pt-1">
+<button class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-surface-darkcardhigh hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold transition-all" onclick="resolveAlarmSlot1()">
+<span class="material-symbols-outlined text-sm">notifications_off</span>
+<span>Alarmı Sustur</span>
+</button>
+<button class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl gold-gradient-bg text-black font-bold text-xs shadow hover:brightness-110 active:scale-95 transition-all" onclick="openInstantSale('22 Ayar Trabzon Hasırı Altın Bilezik', 28.60, 86500, 1)">
+<span class="material-symbols-outlined text-sm">shopping_cart_checkout</span>
+<span>Satışa Dönüştür</span>
+</button>
+</div>
+</div>
+</div>
+<!-- SLOT #2: UNDER INSPECTION CARD -->
+<div class="flex flex-col rounded-2xl bg-surface-darkcard amber-glow overflow-hidden transition-all duration-300 relative shadow-2xl" id="slot2Card">
+<!-- Top Status Bar -->
+<div class="p-3.5 bg-amber-950/70 border-b border-amber-500/40 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-amber-600 text-black font-bold">SLOT #2</span>
+<div class="flex flex-col">
+<span class="text-xs font-bold text-white tracking-wide">Vitrin Orta Askı #2</span>
+<span class="text-[10px] font-mono text-amber-200">IP: 192.168.1.102 • Sinyal: %98</span>
+</div>
+</div>
+<span class="flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-amber-500 text-black uppercase tracking-wider shadow">
+<span class="material-symbols-outlined text-sm">pan_tool</span>
+<span>MÜŞTERİ İNCELİYOR</span>
+</span>
+</div>
+<!-- Content -->
+<div class="p-5 flex flex-col flex-1 gap-4">
+<!-- Product Row -->
+<div class="flex items-start gap-3.5">
+<div class="w-24 h-24 rounded-xl overflow-hidden bg-black/60 border border-amber-500/40 shrink-0 relative shadow-inner">
+<img alt="24 Ayar Külçe Tasarım Kolye" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSJYxwIsWMylNXrfhVFFthQd5PjX2VS5f5C32utnzvNXbLecXGzpaSQsbs85z7Naxh9T2LaZEg8zaNIvIPAX4LCpbd9zE2GTxNTtVzh-wSmqnGyY4o4lHcpPI6wOJLAijGz35ETWG5bk8VP_VHxEXrD_oQni7lqlAP7ZzIVfJvnr5OvZAaUoca7fXFzJcQ3gsP5kWgqCB_khRSyAfV414agcfSFYLw6W9nHetYXatiZdUjKKmM7ZguKA"/>
+<span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono font-bold text-gold-400 border border-gold-500/40">24K 995</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<div class="flex items-center gap-1.5">
+<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono font-semibold border border-amber-500/30">Yatırım Kolye</span>
+<span class="text-[10px] text-slate-400 font-mono">KYM-2024-003</span>
+</div>
+<h4 class="text-base font-bold text-white mt-1 leading-snug truncate font-cinzel">24 Ayar Külçe 10g Kolye</h4>
+<div class="text-2xl font-display font-bold text-gold-400 mt-1">₺31.500</div>
+</div>
+</div>
+<!-- Weight Telemetry Box -->
+<div class="grid grid-cols-2 gap-2.5 p-3.5 rounded-xl bg-black/50 border border-white/5">
+<div>
+<span class="text-[10px] uppercase font-mono text-slate-400 tracking-wider">Anlık Askı Yükü</span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="text-3xl font-mono font-bold text-amber-400">0.00</span>
+<span class="text-sm text-amber-400 font-bold">g</span>
+</div>
+<span class="text-[10px] text-amber-300 font-mono block mt-0.5">Dara Kilitlendi (Yetkili)</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-mono text-slate-400 tracking-wider">Referans Gramaj</span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="text-3xl font-mono font-bold text-slate-200">10.00</span>
+<span class="text-sm text-slate-400">g</span>
+</div>
+<span class="text-[10px] text-slate-400 block mt-0.5">Danışman: Ahmet Y.</span>
+</div>
+</div>
+<!-- Info & Actions -->
+<div class="flex items-center justify-between text-xs border-t border-white/5 pt-2">
+<span class="text-amber-400 font-semibold flex items-center gap-1 font-mono">
+<span class="material-symbols-outlined text-sm">timer</span>
+                  İnceleme: <strong>01:12 dk</strong>
+</span>
+<span class="text-slate-400 font-mono text-[11px]">Bugün: 19 kez denendi</span>
+</div>
+<div class="grid grid-cols-2 gap-2.5 mt-auto pt-1">
+<button class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-surface-darkcardhigh hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold transition-all" onclick="returnToRack(2, 10.00)">
+<span class="material-symbols-outlined text-sm text-emerald-400">check_circle</span>
+<span>Askıya İade Edildi</span>
+</button>
+<button class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl gold-gradient-bg text-black font-bold text-xs shadow hover:brightness-110 active:scale-95 transition-all" onclick="openInstantSale('24 Ayar Külçe Tasarım 10g Altın Kolye', 10.00, 31500, 2)">
+<span class="material-symbols-outlined text-sm">point_of_sale</span>
+<span>Satışı Tamamla</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SHOWCASE ARCHITECTURAL BAY: SECURE VAULT & ASKI RUNWAY (SLOTS #3, #4, #5 & #6) -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+<h3 class="text-sm font-bold text-white uppercase tracking-wider font-cinzel">İç Koruma ve Askı Güvenlik Hattı (Slot #3 - #6)</h3>
+</div>
+<span class="text-[11px] font-mono text-emerald-400">TAM KAPALI MESH AĞI</span>
+</div>
+<!-- 4-Column Sleek Showcase Runway -->
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+<!-- SLOT #3: 18 Ayar Safir Yüzük -->
+<div class="flex flex-col rounded-2xl bg-surface-darkcard emerald-glow overflow-hidden transition-all duration-300 relative shadow-xl">
+<!-- Top Strip -->
+<div class="p-3 bg-emerald-950/60 border-b border-emerald-500/30 flex items-center justify-between">
+<span class="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white">SLOT #3</span>
+<span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase">GÜVENLİ</span>
+</div>
+<!-- Body -->
+<div class="p-4 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-3">
+<div class="w-16 h-16 rounded-xl overflow-hidden bg-black/60 border border-emerald-500/30 shrink-0 relative shadow-inner">
+<img alt="18 Ayar Safir Taşlı Lüks Yüzük" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCXCXaOwRCeZJ8-H64cpFOY-gRAfjtu0Zj185RgrAFk0Xmygoh3Ek9lcwhblTydBbKnLN2B6J19b-6WkglWcAbpFlAAjQngsobiYvUua88lNrv8liRw9yarrOq63c-LHHkr5lNGbXBpK0EiP_ZnnhVCxmVYGEopCN47V33ajx8msGqaPQ-_kz6Hw5CFRlJEsywVZ7-VCn_CAILMDEQNgaLT1cou4bFzmN_Qj8GHSEI0n5IwAsuFjm4OQ"/>
+<span class="absolute bottom-0.5 left-0.5 px-1 py-0.2 rounded bg-black/80 text-[8px] font-mono font-bold text-gold-400">18K</span>
+</div>
+<div class="min-w-0 flex-1">
+<span class="text-[9px] text-slate-400 font-mono block">KYM-2024-004</span>
+<h5 class="text-xs font-bold text-white truncate font-cinzel">18 Ayar Safir Taşlı Yüzük</h5>
+<div class="text-base font-display font-bold text-gold-400">₺28.900</div>
+</div>
+</div>
+<!-- Mini Telemetry Gauge -->
+<div class="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
+<div>
+<span class="text-[9px] text-slate-400 block uppercase">Askı Yükü</span>
+<span class="font-bold text-emerald-400 text-sm">6.40 g</span>
+</div>
+<div>
+<span class="text-[9px] text-slate-400 block uppercase">Referans</span>
+<span class="font-bold text-slate-300 text-sm">6.40 g</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[10px] text-slate-400 font-mono border-t border-white/5 pt-1.5">
+<span class="text-emerald-400 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> %100 Kararlı</span>
+<span>35 İnceleme</span>
+</div>
+<!-- Actions -->
+<div class="grid grid-cols-2 gap-1.5 mt-auto pt-1">
+<button class="py-1.5 px-2 rounded-lg bg-surface-darkcardhigh hover:bg-white/10 border border-white/10 text-slate-300 text-[11px] font-semibold" onclick="startInspection(3)">
+                  İncele
+                </button>
+<button class="py-1.5 px-2 rounded-lg bg-gold-600/20 hover:bg-gold-600 hover:text-black border border-gold-500/40 text-gold-300 font-bold text-[11px]" onclick="openInstantSale('18 Ayar Safir Taşlı Lüks Yüzük', 6.40, 28900, 3)">
+                  Satış
+                </button>
+</div>
+</div>
+</div>
+<!-- SLOT #4: 14 Ayar Baget Kolye -->
+<div class="flex flex-col rounded-2xl bg-surface-darkcard emerald-glow overflow-hidden transition-all duration-300 relative shadow-xl">
+<!-- Top Strip -->
+<div class="p-3 bg-emerald-950/60 border-b border-emerald-500/30 flex items-center justify-between">
+<span class="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white">SLOT #4</span>
+<span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase">GÜVENLİ</span>
+</div>
+<!-- Body -->
+<div class="p-4 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-3">
+<div class="w-16 h-16 rounded-xl overflow-hidden bg-black/60 border border-emerald-500/30 shrink-0 relative shadow-inner">
+<img alt="14 Ayar Baget Kesim Kolye" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzfZzavHgVUkSKc6jmq_y0IyhDem7a9vloKjJojQzzMmme0F58nQW337C4okq4sepc2ZFPsP5a8bcD2hX8PC3kImao7eHnYlJHOURfZC-XGJq20Gc_Nj6eIC7z_7JOcL3UKk_DtN88_6Q07G-qk4MbA6yHpOudeLM9YBPuz-zx8YnsTVQADAZ04u2X7b-LP4EMq-3HXlx3_-3tjOF0jjzKM0k6JYwB5FDnCf33iq8NSfdiS3ljjnzymQ"/>
+<span class="absolute bottom-0.5 left-0.5 px-1 py-0.2 rounded bg-black/80 text-[8px] font-mono font-bold text-gold-400">14K</span>
+</div>
+<div class="min-w-0 flex-1">
+<span class="text-[9px] text-slate-400 font-mono block">KYM-2024-002</span>
+<h5 class="text-xs font-bold text-white truncate font-cinzel">14 Ayar Baget Pırlanta Kolye</h5>
+<div class="text-base font-display font-bold text-gold-400">₺24.200</div>
+</div>
+</div>
+<!-- Mini Telemetry Gauge -->
+<div class="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
+<div>
+<span class="text-[9px] text-slate-400 block uppercase">Askı Yükü</span>
+<span class="font-bold text-emerald-400 text-sm">7.85 g</span>
+</div>
+<div>
+<span class="text-[9px] text-slate-400 block uppercase">Referans</span>
+<span class="font-bold text-slate-300 text-sm">7.85 g</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[10px] text-slate-400 font-mono border-t border-white/5 pt-1.5">
+<span class="text-emerald-400 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Kesintisiz Aktif</span>
+<span>28 İnceleme</span>
+</div>
+<!-- Actions -->
+<div class="grid grid-cols-2 gap-1.5 mt-auto pt-1">
+<button class="py-1.5 px-2 rounded-lg bg-surface-darkcardhigh hover:bg-white/10 border border-white/10 text-slate-300 text-[11px] font-semibold" onclick="startInspection(4)">
+                  İncele
+                </button>
+<button class="py-1.5 px-2 rounded-lg bg-gold-600/20 hover:bg-gold-600 hover:text-black border border-gold-500/40 text-gold-300 font-bold text-[11px]" onclick="openInstantSale('14 Ayar Baget Kesim Pırlantalı Kolye', 7.85, 24200, 4)">
+                  Satış
+                </button>
+</div>
+</div>
+</div>
+<!-- SLOT #5: 22 Ayar Reşat Beşli Gerdanlık -->
+<div class="flex flex-col rounded-2xl bg-surface-darkcard emerald-glow overflow-hidden transition-all duration-300 relative shadow-xl">
+<!-- Top Strip -->
+<div class="p-3 bg-emerald-950/60 border-b border-emerald-500/30 flex items-center justify-between">
+<span class="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white">SLOT #5</span>
+<span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase">GÜVENLİ</span>
+</div>
+<!-- Body -->
+<div class="p-4 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-3">
+<div class="w-16 h-16 rounded-xl overflow-hidden bg-black/60 border border-emerald-500/30 shrink-0 relative shadow-inner">
+<img alt="22 Ayar Reşat Beşli Altın Gerdanlık" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVh1yI083F30kJCiuK0otV2lcyAXDDJQhk1WYOysTYx8qjfJX52LS-VYKs8tco-11Y3vexEBDIPb-dtjDMxag3nEs96VJiviRk6uS2IUGUzEuVCxegunI9dXtSLCRyefCyh8imDkXHmfcM4Ja8aALA6NJkwei8EOhepTFl7GJzoNHlpZeeiKh5b4_QY7-4OL6J3a_59SbLYZgoN1XZmgOOfjz4K5n4UJmWSlX2w_gB2bbtrNGopfPlGw"/>
+<span class="absolute bottom-0.5 left-0.5 px-1 py-0.2 rounded bg-black/80 text-[8px] font-mono font-bold text-gold-400">22K</span>
+</div>
+<div class="min-w-0 flex-1">
+<span class="text-[9px] text-slate-400 font-mono block">KYM-2024-007</span>
+<h5 class="text-xs font-bold text-white truncate font-cinzel">22 Ayar Reşat Beşli</h5>
+<div class="text-base font-display font-bold text-gold-400">₺154.000</div>
+</div>
+</div>
+<!-- Mini Telemetry Gauge -->
+<div class="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
+<div>
+<span class="text-[9px] text-slate-400 block uppercase">Askı Yükü</span>
+<span class="font-bold text-emerald-400 text-sm">48.90 g</span>
+</div>
+<div>
+<span class="text-[9px] text-slate-400 block uppercase">Referans</span>
+<span class="font-bold text-slate-300 text-sm">48.90 g</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[10px] text-slate-400 font-mono border-t border-white/5 pt-1.5">
+<span class="text-emerald-400 flex items-center gap-1"><span class="material-symbols-outlined text-xs">security</span> Maks. Koruma</span>
+<span>3 İnceleme</span>
+</div>
+<!-- Actions -->
+<div class="grid grid-cols-2 gap-1.5 mt-auto pt-1">
+<button class="py-1.5 px-2 rounded-lg bg-surface-darkcardhigh hover:bg-white/10 border border-white/10 text-slate-300 text-[11px] font-semibold" onclick="startInspection(5)">
+                  İncele
+                </button>
+<button class="py-1.5 px-2 rounded-lg bg-gold-600/20 hover:bg-gold-600 hover:text-black border border-gold-500/40 text-gold-300 font-bold text-[11px]" onclick="openInstantSale('22 Ayar Reşat Beşli Altın Gerdanlık', 48.90, 154000, 5)">
+                  Satış
+                </button>
+</div>
+</div>
+</div>
+<!-- SLOT #6: EMPTY / READY FOR NEW JEWELRY -->
+<div class="flex flex-col rounded-2xl bg-surface-darkcard border border-white/10 hover:border-gold-500/50 overflow-hidden transition-all duration-300 relative shadow-lg group">
+<!-- Top Strip -->
+<div class="p-3 bg-black/40 border-b border-white/10 flex items-center justify-between">
+<span class="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">SLOT #6</span>
+<span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-white/10 text-slate-300 uppercase">BOŞ ASKI</span>
+</div>
+<!-- Body -->
+<div class="p-4 flex flex-col items-center justify-between flex-1 text-center gap-3">
+<div class="w-12 h-12 rounded-xl bg-gold-600/10 border border-gold-500/30 flex items-center justify-center text-gold-400 group-hover:scale-105 transition-transform mt-1">
+<span class="material-symbols-outlined text-2xl">add_shopping_cart</span>
+</div>
+<div>
+<h5 class="text-xs font-bold text-white font-cinzel">Yeni Mücevher Tanımla</h5>
+<p class="text-[10px] text-slate-400 leading-tight mt-0.5">RFID / Barkod okutulduğunda dara sıfırlanır.</p>
+</div>
+<!-- Mini Sensor Readout -->
+<div class="w-full grid grid-cols-2 gap-1 p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-left">
+<div>
+<span class="text-slate-400 block text-[8px]">Ağırlık:</span>
+<span class="text-white font-bold">0.000 g</span>
+</div>
+<div>
+<span class="text-slate-400 block text-[8px]">Tolerans:</span>
+<span class="text-emerald-400 font-bold">±0.001g</span>
+</div>
+</div>
+<button class="w-full flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-surface-darkcardhigh hover:bg-gold-600 hover:text-black border border-gold-600/30 text-gold-300 font-semibold text-[10px] tracking-wider uppercase transition-all shadow" onclick="promptMountJewelry()">
+<span class="material-symbols-outlined text-xs">qr_code_scanner</span>
+<span>Barkod / RFID</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+</div>
+<!-- QUICK POS / SALES CHECKOUT MODAL -->
+<div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4 transition-all" id="posModalOverlay">
+<div class="w-full max-w-lg bg-[#141620] border border-gold-500/40 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 relative overflow-hidden">
+<div class="absolute -right-20 -top-20 w-60 h-60 bg-gold-600/15 rounded-full blur-3xl pointer-events-none"></div>
+<!-- Close Button -->
+<button class="absolute top-5 right-5 text-slate-400 hover:text-white transition-colors" onclick="toggleQuickPOS()">
+<span class="material-symbols-outlined text-2xl">close</span>
+</button>
+<!-- Modal Header -->
+<div class="flex items-center gap-3.5">
+<div class="w-12 h-12 rounded-2xl gold-gradient-bg text-black flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-2xl font-bold">point_of_sale</span>
+</div>
+<div>
+<span class="text-[11px] font-mono uppercase tracking-widest text-gold-400 font-semibold block">SARRAF ERDEM ERP KASA</span>
+<h3 class="text-xl font-bold text-white font-cinzel">Hızlı Satış &amp; Askı Kapatma</h3>
+</div>
+</div>
+<!-- Product Summary Box -->
+<div class="p-4 rounded-2xl bg-black/50 border border-gold-600/30 space-y-2">
+<div class="flex items-center justify-between">
+<span class="text-xs text-slate-400 font-sans">Seçilen Ürün:</span>
+<span class="text-sm font-bold text-white font-cinzel" id="posItemName">22 Ayar Trabzon Hasırı Altın Bilezik</span>
+</div>
+<div class="flex items-center justify-between font-mono">
+<span class="text-xs text-slate-400">Net Gramaj (HX711):</span>
+<span class="text-sm font-bold text-gold-400" id="posItemGram">28.60 g</span>
+</div>
+<div class="flex items-center justify-between border-t border-white/10 pt-2">
+<span class="text-xs text-slate-400 font-sans font-semibold">Toplam Satış Tutarı:</span>
+<span class="text-2xl font-bold font-display gold-gradient-text" id="posItemPrice">₺86.500</span>
+</div>
+</div>
+<!-- Form Inputs -->
+<div class="space-y-4">
+<div>
+<label class="block text-xs font-mono text-slate-400 uppercase mb-1">Müşteri Ad Soyad / TC</label>
+<input class="w-full px-3.5 py-2.5 rounded-xl bg-surface-darkcardhigh border border-white/10 text-white text-xs focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none transition" id="posCustomerName" type="text" value="Kemalettin Ersoylu"/>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-mono text-slate-400 uppercase mb-1">Satış Danışmanı</label>
+<select class="w-full px-3 py-2.5 rounded-xl bg-surface-darkcardhigh border border-white/10 text-white text-xs focus:border-gold-500 outline-none">
+<option>Ahmet Yılmaz (Danışman)</option>
+<option>Ayşe Demir (Danışman)</option>
+<option>Erdem Sarraf (Yönetici)</option>
+</select>
+</div>
+<div>
+<label class="block text-xs font-mono text-slate-400 uppercase mb-1">Ödeme Yöntemi</label>
+<select class="w-full px-3 py-2.5 rounded-xl bg-surface-darkcardhigh border border-white/10 text-white text-xs focus:border-gold-500 outline-none">
+<option>Nakit TL</option>
+<option>Kredi Kartı (Tek Çekim)</option>
+<option>Hurda Altın Takası</option>
+<option>Havale / FAST</option>
+</select>
+</div>
+</div>
+<div class="p-3 rounded-xl bg-gold-600/10 border border-gold-500/25 flex items-center gap-2.5 text-gold-300 text-xs">
+<span class="material-symbols-outlined text-lg text-gold-400 shrink-0">verified</span>
+<span>Satış onaylandığı an askı yükü ERP üzerinde 0.00g olarak tescillenir ve alarm otomatik kapanır.</span>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center justify-end gap-3 pt-2">
+<button class="px-4 py-2.5 rounded-xl bg-surface-darkcardhigh hover:bg-white/10 text-slate-300 text-xs font-semibold transition-all" onclick="toggleQuickPOS()">
+        Vazgeç
+      </button>
+<button class="px-5 py-2.5 rounded-xl gold-gradient-bg text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-lg" onclick="finalizeInstantSale()">
+        Satışı Onayla &amp; e-Fatura Düzenle
+      </button>
+</div>
+</div>
+</div>
+<!-- LUXURY FOOTER -->
+<footer class="mt-12 border-t border-gold-600/20 bg-[#0a0b0f] py-6 text-slate-400 text-xs font-mono">
+<div class="max-w-[1700px] mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<div class="p-1 rounded bg-black/50 border border-gold-600/30">
+<img alt="SARRAF ERDEM" class="h-6 w-auto" src="https://lh3.googleusercontent.com/aida/AEtjO1WCeH2IVcJ8zZXzrDPBpbgtKAmrFcniorEBhxneqoPS8PpWu36N03VlH_cgKs9vxBqpjNw21iZTtNLJab-Ier61ZKGNl92BqMMUyIGl0YQ0IOqN_sh7KbYNHzkj-dAkuPss9VjJRxC2Z0B0XBg1dXCSn_OrlhPptqWywioro1Zlvdd7oF0aPN0JiSz_YAjelxBFp8kxPuZaAQqcz2Gy5XWjQIqP8QdjDpLVgn7nsNMIg4_3ptG2OEt_DYif"/>
+</div>
+<span>© 2025 SARRAF ERDEM MÜCEVHERAT A.Ş. • Akıllı Vitrin &amp; IoT Telemetri ERP</span>
+</div>
+<div class="flex flex-wrap items-center gap-4 text-[11px]">
+<span class="flex items-center gap-1 text-emerald-400">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> HX711 TELEMETRİ OK
+      </span>
+<span class="text-slate-500">•</span>
+<span>AES-256 KASA ŞİFRELEME</span>
+<span class="text-slate-500">•</span>
+<span>İSTANBUL KUYUMCULAR ODASI ENTEGRASYONU</span>
+</div>
+</div>
+</footer>
+<!-- CLIENT-SIDE VANILLA INTERACTION JAVASCRIPT -->
+<script>
+    let activeTargetSlot = 1;
+    let sirenActive = true;
+
+    // Apply VIP Dark (Black & Gold) or Marble Light (White & Gold)
+    function applyTheme(mode) {
+      const html = document.documentElement;
+      const darkBtn = document.getElementById('themeDarkBtn');
+      const lightBtn = document.getElementById('themeLightBtn');
+
+      if (mode === 'light') {
+        html.classList.remove('dark');
+        darkBtn.className = "px-2 py-1 rounded text-slate-700 hover:text-gold-700 font-semibold text-[11px]";
+        lightBtn.className = "px-2 py-1 rounded bg-gold-600 text-black font-semibold text-[11px] shadow";
+        document.body.classList.remove('bg-surface-dark', 'text-slate-100');
+        document.body.classList.add('bg-[#f7f6f2]', 'text-slate-900');
+      } else {
+        html.classList.add('dark');
+        darkBtn.className = "px-2 py-1 rounded bg-gold-600 text-black font-semibold text-[11px] shadow";
+        lightBtn.className = "px-2 py-1 rounded text-slate-300 hover:text-gold-400 font-semibold text-[11px]";
+        document.body.classList.add('bg-surface-dark', 'text-slate-100');
+        document.body.classList.remove('bg-[#f7f6f2]', 'text-slate-900');
+      }
+    }
+
+    // Siren alarm toggle
+    function toggleSiren() {
+      sirenActive = !sirenActive;
+      const icon = document.getElementById('sirenIcon');
+      const text = document.getElementById('sirenText');
+      if (sirenActive) {
+        icon.className = "material-symbols-outlined text-sm text-rose-500 animate-pulse";
+        icon.innerText = "volume_up";
+        text.innerText = "Açık";
+      } else {
+        icon.className = "material-symbols-outlined text-sm text-slate-400";
+        icon.innerText = "volume_off";
+        text.innerText = "Sessiz";
+      }
+    }
+
+    // Trigger Slot 1 Alarm State
+    function triggerAlarmSlot1() {
+      const card = document.getElementById('slot1Card');
+      const badge = document.getElementById('slot1Badge');
+      const weightDisplay = document.getElementById('slot1WeightDisplay');
+      const diffText = document.getElementById('slot1DiffText');
+      const topBar = document.getElementById('slot1TopBar');
+
+      card.className = "flex flex-col rounded-2xl bg-surface-darkcard crimson-glow overflow-hidden transition-all duration-300 relative shadow-2xl animate-pulse";
+      topBar.className = "p-3.5 bg-rose-950/90 border-b border-rose-500/50 flex items-center justify-between";
+      badge.className = "flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-rose-600 text-white uppercase tracking-wider animate-bounce shadow-md";
+      badge.innerHTML = '<span class="material-symbols-outlined text-sm">e911_emergency</span><span>İZİNSİZ KAYIP!</span>';
+      
+      weightDisplay.innerText = "0.00";
+      weightDisplay.className = "text-3xl font-mono font-bold text-rose-500";
+      diffText.innerText = "FARK: -28.60g (KAYIP)";
+      diffText.className = "text-[10px] text-rose-400 font-mono font-bold block mt-0.5";
+      document.getElementById('slot1Timer').innerText = "00:15 sn";
+    }
+
+    // Resolve Slot 1 Alarm
+    function resolveAlarmSlot1() {
+      const card = document.getElementById('slot1Card');
+      const badge = document.getElementById('slot1Badge');
+      const weightDisplay = document.getElementById('slot1WeightDisplay');
+      const diffText = document.getElementById('slot1DiffText');
+      const topBar = document.getElementById('slot1TopBar');
+
+      card.className = "flex flex-col rounded-2xl bg-surface-darkcard emerald-glow overflow-hidden transition-all duration-300 relative shadow-xl";
+      topBar.className = "p-3.5 bg-emerald-950/60 border-b border-emerald-500/30 flex items-center justify-between";
+      badge.className = "flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase tracking-wider";
+      badge.innerHTML = '<span class="material-symbols-outlined text-sm">check_circle</span><span>SUSTURULDU / GÜVENLİ</span>';
+
+      weightDisplay.innerText = "28.60";
+      weightDisplay.className = "text-3xl font-mono font-bold text-emerald-400";
+      diffText.innerText = "Sapma: ±0.00g (Kararlı)";
+      diffText.className = "text-[10px] text-emerald-400 font-mono block mt-0.5";
+      document.getElementById('slot1Timer').innerText = "Korumada";
+    }
+
+    // Hardware simulator buttons
+    function triggerInspectSlot2() {
+      alert("Slot #2 İnceleme modu aktifleştirildi. Load-Cell darası 120 sn boyunca Ahmet Y. satış danışmanı için kilitlendi.");
+    }
+
+    function returnToRack(slotId, weight) {
+      alert(`Slot #${slotId} ürün güvenle askıya bırakıldı. Load Cell: ${weight.toFixed(2)}g okundu ve vitrin koruması aktif.`);
+    }
+
+    function startInspection(slotId) {
+      alert(`Slot #${slotId} danışman yetki kartı ile incelemeye alındı. Askı alarmı 90 saniye duraklatıldı.`);
+    }
+
+    function recalibrateSensors() {
+      alert("Tüm HX711 24-Bit ADC sensörleri sıfırlandı. 6 yuvada dara ±0.000g olarak dengelendi.");
+    }
+
+    function promptMountJewelry() {
+      const code = prompt("Askıya asılacak yeni ürünün kuyumcu barkodunu girin:", "KYM-2024-008");
+      if (code) {
+        alert(`${code} barkodlu takı Slot #6 askısına başarıyla eşleştirildi. Dara otomatik kalibre edildi.`);
+      }
+    }
+
+    // Modal POS logic
+    function toggleQuickPOS() {
+      const modal = document.getElementById('posModalOverlay');
+      if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function openInstantSale(name, gram, price, slotId) {
+      activeTargetSlot = slotId;
+      document.getElementById('posItemName').innerText = name;
+      document.getElementById('posItemGram').innerText = gram.toFixed(2) + " g";
+      document.getElementById('posItemPrice').innerText = "₺" + price.toLocaleString('tr-TR');
+      toggleQuickPOS();
+    }
+
+    function finalizeInstantSale() {
+      const cust = document.getElementById('posCustomerName').value || "Müşteri";
+      alert(`${cust} adına satış fişi başarıyla kesildi! Slot #${activeTargetSlot} darası kapatıldı ve ERP hasılatına işlendi.`);
+      toggleQuickPOS();
+      if (activeTargetSlot === 1) {
+        resolveAlarmSlot1();
+      }
+    }
+  </script>
+</body></html>
