@@ -72,6 +72,9 @@ import {
   X
 } from 'lucide-react';
 
+import ProductPresentationShowcase from './components/ProductPresentationShowcase';
+import AddProductLuxuryModal from './components/AddProductLuxuryModal';
+
 let API_BASE = 'http://127.0.0.1:8000';
 let WS_URL = 'ws://127.0.0.1:8000/ws/live';
 
@@ -279,6 +282,11 @@ export default function Home() {
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [bulkImportCsvText, setBulkImportCsvText] = useState('');
   const [bulkImportMessage, setBulkImportMessage] = useState('');
+  const [productViewMode, setProductViewMode] = useState('showcase'); // 'showcase' veya 'catalog'
+  const [selectedShowcaseProduct, setSelectedShowcaseProduct] = useState(null);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState('ALL');
+  const [productPurityFilter, setProductPurityFilter] = useState('ALL');
 
   // Form Verileri
   const [newProduct, setNewProduct] = useState({
@@ -965,6 +973,10 @@ export default function Home() {
 
   // VIP Mücevher Müşteri Sunum Ekranı Yükleme
   const handleOpenPresentation = async (productId) => {
+    const foundProduct = products.find(p => p.id === productId);
+    if (foundProduct) {
+      setSelectedShowcaseProduct(foundProduct);
+    }
     setPresentationLoading(true);
     setShowPresentationModal(true);
     setPresentationAngle(0);
@@ -975,8 +987,9 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setPresentationData(data);
-      } else {
-        alert("Ürün sunum detayları yüklenemedi.");
+        if (data.product) {
+          setSelectedShowcaseProduct(data.product);
+        }
       }
     } catch (err) {
       console.error("Presentation load error", err);
@@ -1536,40 +1549,48 @@ export default function Home() {
   };
 
   // Yeni Ürün
-  const handleCreateProduct = async (e) => {
-    e.preventDefault();
+  const handleCreateProduct = async (formDataOrEvent) => {
+    if (formDataOrEvent && formDataOrEvent.preventDefault) {
+      formDataOrEvent.preventDefault();
+    }
     if (!token || currentUser?.role !== 'ADMIN') return;
     try {
-      const payload = {
-        barcode: newProduct.barcode,
-        name: newProduct.name,
-        category: newProduct.category,
-        purity: newProduct.purity,
-        milyem: parseInt(newProduct.milyem || 916),
-        gold_color: newProduct.gold_color,
-        weight_grams: parseFloat(newProduct.weight_grams),
-        labor_cost: parseFloat(newProduct.labor_cost || 0),
-        cost_price: parseFloat(newProduct.cost_price || 0),
-        price: parseFloat(newProduct.price),
-        image_url: newProduct.image_url || null,
-        description: newProduct.description || null,
-        slot_id: newProduct.slot_id ? parseInt(newProduct.slot_id) : null,
-        size_or_length: newProduct.size_or_length || null,
-        craftsmanship_type: newProduct.craftsmanship_type,
-        surface_finish: newProduct.surface_finish,
-        workshop_origin: newProduct.workshop_origin,
-        allow_engraving: newProduct.allow_engraving,
-        has_stones: newProduct.has_stones,
-        gemstone_type: newProduct.has_stones ? newProduct.gemstone_type : null,
-        diamond_carat: (newProduct.has_stones && newProduct.diamond_carat) ? parseFloat(newProduct.diamond_carat) : null,
-        diamond_color: newProduct.has_stones ? newProduct.diamond_color : null,
-        diamond_clarity: newProduct.has_stones ? newProduct.diamond_clarity : null,
-        diamond_cut: newProduct.has_stones ? newProduct.diamond_cut : null,
-        stone_shape: newProduct.has_stones ? newProduct.stone_shape : null,
-        stone_certificate: newProduct.has_stones ? newProduct.stone_certificate : null,
-        certificate_no: newProduct.has_stones ? newProduct.certificate_no : null,
-        care_instructions: newProduct.care_instructions
-      };
+      let payload;
+      if (formDataOrEvent && formDataOrEvent.barcode) {
+        payload = formDataOrEvent;
+      } else {
+        payload = {
+          barcode: newProduct.barcode,
+          name: newProduct.name,
+          category: newProduct.category,
+          purity: newProduct.purity,
+          milyem: parseInt(newProduct.milyem || 916),
+          gold_color: newProduct.gold_color,
+          weight_grams: parseFloat(newProduct.weight_grams),
+          labor_cost: parseFloat(newProduct.labor_cost || 0),
+          cost_price: parseFloat(newProduct.cost_price || 0),
+          price: parseFloat(newProduct.price),
+          image_url: newProduct.image_url || null,
+          description: newProduct.description || null,
+          slot_id: newProduct.slot_id ? parseInt(newProduct.slot_id) : null,
+          size_or_length: newProduct.size_or_length || null,
+          craftsmanship_type: newProduct.craftsmanship_type,
+          surface_finish: newProduct.surface_finish,
+          workshop_origin: newProduct.workshop_origin,
+          allow_engraving: newProduct.allow_engraving,
+          has_stones: newProduct.has_stones,
+          gemstone_type: newProduct.has_stones ? newProduct.gemstone_type : null,
+          diamond_carat: (newProduct.has_stones && newProduct.diamond_carat) ? parseFloat(newProduct.diamond_carat) : null,
+          diamond_color: newProduct.has_stones ? newProduct.diamond_color : null,
+          diamond_clarity: newProduct.has_stones ? newProduct.diamond_clarity : null,
+          diamond_cut: newProduct.has_stones ? newProduct.diamond_cut : null,
+          stone_shape: newProduct.has_stones ? newProduct.stone_shape : null,
+          stone_certificate: newProduct.has_stones ? newProduct.stone_certificate : null,
+          certificate_no: newProduct.has_stones ? newProduct.certificate_no : null,
+          care_instructions: newProduct.care_instructions,
+          additional_images_json: newProduct.additional_images_json || null
+        };
+      }
 
       const res = await fetch(`${API_BASE}/api/v1/products`, {
         method: 'POST',
@@ -1581,19 +1602,13 @@ export default function Home() {
       });
       if (res.ok) {
         setShowAddProductModal(false);
-        setNewProduct({
-          barcode: '', name: '', category: 'Yüzük', purity: '22K', milyem: 916, gold_color: 'Sarı Altın',
-          weight_grams: '', labor_cost: '', cost_price: '', price: '', image_url: '', slot_id: '',
-          description: '', size_or_length: '', craftsmanship_type: 'El İşçiliği', surface_finish: 'Parlak',
-          workshop_origin: 'Kapalıçarşı Geleneksel Usta Ekolü', allow_engraving: true, has_stones: false,
-          gemstone_type: 'Pırlanta', diamond_carat: '', diamond_color: 'G', diamond_clarity: 'VS1',
-          diamond_cut: 'Excellent', stone_shape: 'Yuvarlak (Brillant)', stone_certificate: 'HRD Antwerp',
-          certificate_no: '', care_instructions: 'Parfüm ve kimyasallardan uzak tutunuz.'
-        });
         fetchProducts();
         fetchSlots();
         fetchDemandAnalytics();
         fetchSystemLogs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert("Ürün eklenemedi: " + (err.detail || "Sunucu hatası"));
       }
     } catch (e) { alert("Hata: " + e.message); }
   };
@@ -1743,100 +1758,216 @@ export default function Home() {
   // ================= GİRİŞ YAPILMAMIŞSA LOGIN EKRANI =================
   if (!token || !currentUser) {
     return (
-      <div className="min-h-screen bg-[#0b0c10] flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="w-full max-w-md bg-[#12141c] border border-amber-500/30 rounded-2xl p-8 shadow-2xl relative z-10">
-          <div className="text-center mb-8">
-            <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/10 border border-amber-500/40 mb-4 shadow-lg">
-              <img src={LOGO_URL} alt="Logo" className="w-14 h-14 object-contain filter drop-shadow" />
-            </div>
-            <h1 className="font-cinzel text-2xl font-bold tracking-wider gold-gradient-text uppercase">
-              SARRAF ERDEM
-            </h1>
-            <p className="text-xs tracking-widest text-slate-400 uppercase mt-1">
-              Akıllı IoT Vitrin & Mücevherat ERP
-            </p>
-          </div>
-
-          {loginError && (
-            <div className="mb-6 p-3 rounded-lg bg-red-950/50 border border-red-500/50 text-red-300 text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-              <span>{loginError}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Kullanıcı Adı
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-amber-500/70 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  required
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                  placeholder="admin veya personel"
-                  className="w-full bg-[#0e1017] border border-[#242938] focus:border-amber-500 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none transition"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Şifre
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-amber-500/70 absolute left-3 top-3" />
-                <input
-                  type="password"
-                  required
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-[#0e1017] border border-[#242938] focus:border-amber-500 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none transition"
-                />
-              </div>
-            </div>
-
-            <button type="submit" disabled={authLoading} className="btn-gold w-full py-3 justify-center text-sm font-bold tracking-wide mt-2">
-              {authLoading ? 'Giriş Yapılıyor...' : 'Sisteme Güvenli Giriş'}
-            </button>
-          </form>
-
-          <div className="mt-6 pt-5 border-t border-[#242938]">
-            <p className="text-[11px] text-center text-slate-400 mb-2.5 font-medium">Hızlı Rol Seçimi (Tek Tıkla Giriş):</p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => { setLoginUsername('admin'); setLoginPassword('admin123'); }}
-                className="bg-[#191c26] border border-amber-500/40 text-amber-300 p-2 rounded-xl text-center hover:bg-amber-500/10 transition flex flex-col items-center"
-              >
-                <span className="text-xs font-bold">👑 Patron</span>
-                <span className="text-[9px] text-amber-400/80 font-mono mt-0.5">Tüm Şirket</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLoginUsername('selim_mudur'); setLoginPassword('123456'); }}
-                className="bg-[#191c26] border border-blue-500/40 text-blue-300 p-2 rounded-xl text-center hover:bg-blue-500/10 transition flex flex-col items-center"
-              >
-                <span className="text-xs font-bold">🏬 Müdür</span>
-                <span className="text-[9px] text-blue-400/80 font-mono mt-0.5">Nişantaşı</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLoginUsername('ahmet_kasiyer'); setLoginPassword('123456'); }}
-                className="bg-[#191c26] border border-emerald-500/40 text-emerald-300 p-2 rounded-xl text-center hover:bg-emerald-500/10 transition flex flex-col items-center"
-              >
-                <span className="text-xs font-bold">👤 Personel</span>
-                <span className="text-[9px] text-emerald-400/80 font-mono mt-0.5">Kapalıçarşı</span>
-              </button>
-            </div>
-          </div>
+      <div className="min-h-screen bg-[#07080a] text-slate-100 flex flex-col relative overflow-x-hidden">
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[450px] rounded-full" style={{background:'rgba(212,175,55,0.10)',filter:'blur(130px)'}} />
+          <div className="absolute bottom-0 left-0 w-[450px] h-[350px] rounded-full" style={{background:'rgba(184,146,37,0.05)',filter:'blur(120px)'}} />
+          <div className="absolute inset-0 opacity-30" style={{backgroundImage:'radial-gradient(rgba(212,175,55,0.07) 1px, transparent 1px)',backgroundSize:'32px 32px'}} />
         </div>
+        <header className="relative z-10 w-full border-b border-white/10 px-6 py-2.5 flex items-center justify-between text-xs" style={{background:'rgba(12,13,18,0.85)'}}>
+          <div className="flex items-center gap-4">
+            <span className="inline-flex w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <div className="hidden md:flex items-center gap-3 font-mono font-semibold">
+              <span className="text-slate-200">HAS ALTIN: <span style={{color:'#e5c158'}}>{'₺3.788,20'}</span> <span className="text-emerald-400 text-[11px]">{'▲%0.84'}</span></span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-200">22 AYAR: <span style={{color:'#e5c158'}}>{'₺3.564,80'}</span></span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-200">USD/TRY: <span className="text-slate-300">38.165 ₺</span></span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/30" style={{background:'rgba(18,19,26,1)'}}>
+              <span className="w-2 h-2 rounded-full bg-emerald-500" style={{boxShadow:'0 0 8px #10b981'}} />
+              <span className="font-mono text-[11px] text-emerald-400 font-semibold">ESP32 MESH: 6/6 AKTİF</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-1 font-mono text-[11px] text-slate-400">
+              DARA: <span style={{color:'#f6e08c',fontWeight:'bold'}}>±0.005g</span>
+            </div>
+          </div>
+        </header>
+        <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-8 my-4">
+          <div className="w-full max-w-5xl rounded-2xl border overflow-hidden grid grid-cols-1 lg:grid-cols-12 shadow-2xl"
+            style={{background:'rgba(12,13,18,0.95)',borderColor:'rgba(212,175,55,0.30)',boxShadow:'0 0 35px -5px rgba(212,175,55,0.25)'}}>
+            {/* Sol Panel */}
+            <div className="lg:col-span-5 p-8 sm:p-10 border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col justify-between relative overflow-hidden"
+              style={{background:'linear-gradient(to bottom,#12131a,#0c0d12,#07080a)'}}>
+              <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full border border-amber-500/10 pointer-events-none" style={{background:'rgba(212,175,55,0.04)'}} />
+              <div>
+                <div className="flex items-center gap-3.5 mb-8">
+                  <div className="w-12 h-12 p-2.5 rounded-xl border border-amber-500/40 flex items-center justify-center"
+                    style={{background:'linear-gradient(135deg,rgba(212,175,55,0.20),rgba(212,175,55,0.06))'}}>
+                    <Scale className="w-7 h-7" style={{color:'#e5c158'}} />
+                  </div>
+                  <div>
+                    <h1 style={{background:'linear-gradient(135deg,#FFF6D1 0%,#D4AF37 50%,#AA820A 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',fontFamily:"'Playfair Display',serif",fontSize:'1.5rem',fontWeight:'700',letterSpacing:'0.1em',textTransform:'uppercase'}}>SARRAF ERDEM</h1>
+                    <p className="text-[10px] font-mono tracking-widest uppercase font-semibold" style={{color:'rgba(212,175,55,0.8)'}}>Haute Joaillerie &amp; Akıllı IoT Vitrin</p>
+                  </div>
+                </div>
+                <div className="mb-8">
+                  <h2 className="text-lg font-semibold text-white mb-2" style={{fontFamily:"'Playfair Display',serif"}}>Yüksek Güvenlikli Kuyumculuk &amp; Teşhir Otomasyonu</h2>
+                  <p className="text-xs text-slate-400 leading-relaxed">24-Bit HX711 mikrogram telemetrisi, canlı Kapalıçarşı altın borsası fiyatlama köprüsü ve AES-256 kasa kilitleme ağına güvenli erişim.</p>
+                </div>
+                <div className="p-5 rounded-2xl border" style={{background:'linear-gradient(135deg,rgba(212,175,55,0.10),rgba(12,13,18,0.80))',borderColor:'rgba(212,175,55,0.30)'}}>
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-amber-500/20">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{background:'#d4af37',boxShadow:'0 0 8px #d4af37'}} />
+                      <span className="text-[11px] font-mono uppercase font-semibold" style={{color:'#f6e08c'}}>Güvenlik &amp; Sertifika</span>
+                    </div>
+                    <span className="font-mono text-[10px] px-2 py-0.5 rounded border" style={{color:'rgba(212,175,55,0.80)',background:'rgba(212,175,55,0.10)',borderColor:'rgba(212,175,55,0.20)'}}>24K SERTİFİKALI</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 text-xs">
+                      <div className="p-1.5 rounded-lg border flex-shrink-0 mt-0.5" style={{background:'rgba(212,175,55,0.15)',borderColor:'rgba(212,175,55,0.30)',color:'#d4af37'}}><ShieldCheck className="w-3.5 h-3.5"/></div>
+                      <div><p className="font-semibold text-slate-200 text-[12px]">Zanaatkâr &amp; Koleksiyon Tescili</p><p className="text-[11px] text-slate-400 mt-0.5">Kapalıçarşı atölye damgası ve Darphane onaylı ayar sertifikası.</p></div>
+                    </div>
+                    <div className="flex items-start gap-3 text-xs">
+                      <div className="p-1.5 rounded-lg border flex-shrink-0 mt-0.5" style={{background:'rgba(212,175,55,0.15)',borderColor:'rgba(212,175,55,0.30)',color:'#d4af37'}}><Lock className="w-3.5 h-3.5"/></div>
+                      <div><p className="font-semibold text-slate-200 text-[12px]">Çift Kademeli Doğrulama</p><p className="text-[11px] text-slate-400 mt-0.5">256-bit şifrelenmiş VIP PIN kasası erişimi.</p></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-slate-400 text-xs">
+                <div className="flex items-center gap-2"><Fingerprint className="w-4 h-4" style={{color:'#d4af37'}}/><span>RFID Donanım Kartı Destekli</span></div>
+                <span className="font-mono text-[10px] text-slate-500">v4.8 LTS</span>
+              </div>
+            </div>
+            {/* Sağ Panel - Form */}
+            <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-between" style={{background:'#0c0d12'}}>
+              <div>
+                <div className="flex items-center justify-between mb-8">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">GİRİŞ KİMLİK SEÇİMİ</span>
+                  <span className="text-[11px] font-mono px-2.5 py-1 rounded border" style={{color:'rgba(212,175,55,0.90)',background:'rgba(212,175,55,0.10)',borderColor:'rgba(212,175,55,0.20)'}}>Şifreli Oturum (SSL/TLS)</span>
+                </div>
+                {/* Rol Seçimi */}
+                <div className="grid grid-cols-2 p-1.5 rounded-xl border mb-8 gap-1.5" style={{background:'#07080a',borderColor:'rgba(255,255,255,0.10)'}}>
+                  {(['admin','staff']).map((roleKey) => {
+                    const isAdmin = ['admin','selim_mudur'].includes(loginUsername);
+                    const selected = roleKey === 'admin' ? isAdmin : !isAdmin;
+                    return (
+                      <button key={roleKey} type="button"
+                        onClick={() => {
+                          if (roleKey === 'admin') { setLoginUsername('admin'); setLoginPassword('admin123'); }
+                          else { setLoginUsername('ahmet_kasiyer'); setLoginPassword('123456'); }
+                        }}
+                        className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200"
+                        style={selected ? {background:'linear-gradient(to right,#d4af37,#b89225)',color:'#07080a',boxShadow:'0 0 15px -3px rgba(212,175,55,0.30)'} : {color:'#94a3b8'}}>
+                        {roleKey === 'admin' ? <ShieldCheck className="w-4 h-4"/> : <User className="w-4 h-4"/>}
+                        <span>{roleKey === 'admin' ? 'Mağaza Sahibi (Admin)' : 'Satış Danışmanı / Personel'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Rol Banner */}
+                <div className="mb-6 p-3.5 rounded-xl border flex items-start gap-3"
+                  style={['admin','selim_mudur'].includes(loginUsername)
+                    ? {background:'rgba(212,175,55,0.10)',borderColor:'rgba(212,175,55,0.25)'}
+                    : {background:'rgba(30,41,59,0.60)',borderColor:'rgba(255,255,255,0.10)'}}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{background:'rgba(212,175,55,0.20)',color:'#d4af37'}}>
+                    <ShieldCheck className="w-4 h-4"/>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold" style={{color:['admin','selim_mudur'].includes(loginUsername)?'#f6e08c':'#fff'}}>
+                      {['admin','selim_mudur'].includes(loginUsername) ? 'YÖNETİCİ & ERP TAM ERİŞİMİ (ERDEM SARRAF)' : 'SATIŞ DANIŞMANI & KASA PERSONELİ ERİŞİMİ'}
+                    </h4>
+                    <p className="text-[11px] text-slate-300 mt-0.5">
+                      {['admin','selim_mudur'].includes(loginUsername)
+                        ? 'Kasa devri, vitrin askı alarmlarını susturma, personel satış primleri ve BİST fiyat marjı düzenleme yetkisi.'
+                        : 'Ürün sunumu, vitrinden mücevher inceleme çıkarma, anlık POS satış fişi kesme ve hurda altın hesaplama modu.'}
+                    </p>
+                  </div>
+                </div>
+                {loginError && (
+                  <div className="mb-4 p-3 rounded-lg border text-xs flex items-center gap-2" style={{background:'rgba(127,29,29,0.30)',borderColor:'rgba(239,68,68,0.40)',color:'#fca5a5'}}>
+                    <AlertTriangle className="w-4 h-4 shrink-0" style={{color:'#f87171'}}/>
+                    <span>{loginError}</span>
+                  </div>
+                )}
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">Kullanıcı Hesabı / Sicil No</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{color:'#d4af37'}}><User className="w-4 h-4"/></div>
+                      <input
+                        type="text" required
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value)}
+                        placeholder="kullanıcı_adı"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none transition"
+                        style={{background:'#07080a',border:'1px solid rgba(255,255,255,0.15)'}}
+                        onFocus={e => { e.target.style.borderColor='#d4af37'; }}
+                        onBlur={e => { e.target.style.borderColor='rgba(255,255,255,0.15)'; }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">Kasa Güvenlik Şifresi / 6 Haneli VIP PIN</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{color:'#d4af37'}}><Lock className="w-4 h-4"/></div>
+                      <input
+                        type="password" required
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none transition font-mono tracking-widest"
+                        style={{background:'#07080a',border:'1px solid rgba(255,255,255,0.15)'}}
+                        onFocus={e => { e.target.style.borderColor='#d4af37'; }}
+                        onBlur={e => { e.target.style.borderColor='rgba(255,255,255,0.15)'; }}
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-3">
+                    <button type="submit" disabled={authLoading}
+                      className="w-full py-3.5 px-6 rounded-xl font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition transform active:scale-[0.99] disabled:opacity-60"
+                      style={{background:'linear-gradient(to right,#d4af37,#e5c158,#b89225)',color:'#07080a',boxShadow:'0 0 35px -5px rgba(212,175,55,0.25)'}}>
+                      <ShieldCheck className="w-4 h-4" style={{color:'#07080a'}}/>
+                      <span>
+                        {authLoading ? 'Doğrulanıyor...' :
+                          ['admin','selim_mudur'].includes(loginUsername) ? 'GÜVENLİ YÖNETİCİ GİRİŞİ YAP' : 'DANIŞMAN TERMİNALİNE GİRİŞ YAP'}
+                      </span>
+                    </button>
+                  </div>
+                </form>
+                <div className="mt-6 pt-5 border-t border-white/5">
+                  <p className="text-[11px] text-center text-slate-400 mb-3">Hızlı Profil Seçimi (Tek Tıkla):</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      {label:'👑 Patron', sub:'Tüm Şirket', user:'admin', pass:'admin123', color:'#d4af37', border:'rgba(212,175,55,0.40)', bg:'rgba(212,175,55,0.08)'},
+                      {label:'🏬 Müdür', sub:'Nişantaşı', user:'selim_mudur', pass:'123456', color:'#60a5fa', border:'rgba(96,165,250,0.40)', bg:'rgba(96,165,250,0.08)'},
+                      {label:'👤 Personel', sub:'Kapalıçarşı', user:'ahmet_kasiyer', pass:'123456', color:'#34d399', border:'rgba(52,211,153,0.40)', bg:'rgba(52,211,153,0.08)'},
+                    ].map((p) => (
+                      <button key={p.user} type="button"
+                        onClick={() => { setLoginUsername(p.user); setLoginPassword(p.pass); }}
+                        className="p-2 rounded-xl text-center transition flex flex-col items-center"
+                        style={{background: loginUsername===p.user ? p.bg : '#12131a', border:`1px solid ${p.border}`}}>
+                        <span className="text-xs font-bold" style={{color:p.color}}>{p.label}</span>
+                        <span className="text-[9px] font-mono mt-0.5" style={{color:`${p.color}cc`}}>{p.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{background:'#d4af37',boxShadow:'0 0 6px #d4af37'}}/>
+                  <span className="text-slate-300 font-medium">Darphane &amp; İKO Sertifikalı Sistem</span>
+                </div>
+                <div className="flex items-center gap-2 font-mono text-[10px]" style={{color:'rgba(212,175,55,0.90)'}}>
+                  <ShieldCheck className="w-3.5 h-3.5" style={{color:'#d4af37'}}/>
+                  <span>256-Bit SSL Şifreleme</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+        <footer className="relative z-10 w-full border-t border-white/10 px-6 py-3 flex flex-wrap items-center justify-between text-xs text-slate-400" style={{background:'rgba(12,13,18,0.60)'}}>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-300">© 2025 SARRAF ERDEM MÜCEVHERAT A.Ş.</span>
+            <span className="hidden md:inline text-slate-600">•</span>
+            <span className="hidden md:inline">Akıllı IoT Vitrin &amp; Mücevher Telemetri Otomasyonu</span>
+          </div>
+          <span className="font-mono text-[11px]">Node: TR-IST-KAPALICARSI-01</span>
+        </footer>
       </div>
     );
   }
@@ -1847,6 +1978,18 @@ export default function Home() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Filtrelenmiş Katalog Ürünleri
+  const filteredCatalogProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchSearch = !productSearchQuery || 
+        (p.name && p.name.toLowerCase().includes(productSearchQuery.toLowerCase())) || 
+        (p.barcode && p.barcode.toLowerCase().includes(productSearchQuery.toLowerCase()));
+      const matchCat = productCategoryFilter === 'ALL' || p.category === productCategoryFilter;
+      const matchPurity = productPurityFilter === 'ALL' || p.purity === productPurityFilter;
+      return matchSearch && matchCat && matchPurity;
+    });
+  }, [products, productSearchQuery, productCategoryFilter, productPurityFilter]);
 
   // ================= ANA UYGULAMA PANELİ =================
   return (
@@ -3754,28 +3897,59 @@ export default function Home() {
           </div>
         )}
 
-        {/* ================= SEKME 10: ALTIN ENVANTERİ ================= */}
+        {/* ================= SEKME 10: ALTIN & MÜCEVHER VİTRİNİ ================= */}
         {activeTab === 'products' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#12141c] p-4 rounded-xl border border-[#242938]">
-              <div>
-                <h2 className="font-cinzel text-lg font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  ALTIN & MÜCEVHER VİTRİN KOLEKSİYONU
-                </h2>
-                <p className="text-xs text-slate-400">Müşteriye özel lüks sunum yapabilir, 4C pırlanta ve altın hikayesini gösterebilirsiniz.</p>
+            {/* Üst Yönetim & Görünüm Değiştirici Barı */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#12141c] p-4 rounded-2xl border border-[#242938] shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-cinzel text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    SARRAF ERDEM — MÜCEVHER VİTRİNİ & SUNUM PORTALI
+                  </h2>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Canlı borsa hesaplamalı zanaatkâr sunumu ve 4C pırlanta koleksiyon yönetimi
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+                {/* Görünüm Değiştirici */}
+                <div className="flex items-center bg-[#0e1017] p-1 rounded-xl border border-white/10 text-xs font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setProductViewMode('showcase')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition font-semibold ${productViewMode === 'showcase' ? 'bg-amber-500 text-black shadow' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <span>💎</span>
+                    <span>Mücevher Sunum Ekranı</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProductViewMode('catalog')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition font-semibold ${productViewMode === 'catalog' ? 'bg-amber-500 text-black shadow' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <span>📑</span>
+                    <span>Katalog ({products.length})</span>
+                  </button>
+                </div>
+
                 {currentUser.role === 'ADMIN' && (
                   <>
                     <button
                       onClick={() => setShowBulkImportModal(true)}
-                      className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+                      className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
                     >
                       <Share2 className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Excel/CSV Toplu İçe Aktar</span>
+                      <span className="hidden md:inline">Toplu İçe Aktar</span>
                     </button>
-                    <button onClick={() => setShowAddProductModal(true)} className="btn-gold text-xs py-2 px-3.5 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => setShowAddProductModal(true)} 
+                      className="btn-gold text-xs py-2 px-3.5 flex items-center gap-1.5"
+                    >
                       <Plus className="w-4 h-4" />
                       <span>Yeni Mücevher Ekle</span>
                     </button>
@@ -3784,69 +3958,152 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {products.map(p => (
-                <div key={p.id} className="luxury-card overflow-hidden flex flex-col justify-between border border-[#242938] hover:border-amber-500/50 transition duration-300">
-                  <div>
-                    <div className="relative cursor-pointer" onClick={() => handleOpenPresentation(p.id)}>
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name} className="w-full h-48 object-cover group-hover:scale-105 transition duration-500" />
-                      ) : (
-                        <div className="w-full h-48 bg-amber-500/10 flex items-center justify-center text-amber-400">
-                          <Sparkles className="w-10 h-10" />
-                        </div>
-                      )}
-                      <div className="absolute top-2 left-2 flex flex-col gap-1">
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-black/70 backdrop-blur-sm text-amber-300 font-mono font-bold border border-amber-500/30">
-                          {p.purity} • {p.milyem || (p.purity === '22K' ? 916 : 585)}‰
-                        </span>
-                        {p.has_stones && (
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950/80 backdrop-blur-sm text-indigo-300 font-bold border border-indigo-500/40">
-                            💎 {p.diamond_carat ? `${p.diamond_carat} ct` : 'Taşlı'} {p.diamond_color || ''}
-                          </span>
-                        )}
-                      </div>
-                      <div className="absolute top-2 right-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-black/60 backdrop-blur-sm font-bold text-emerald-400 border border-emerald-500/30">
-                          ● {p.status}
-                        </span>
-                      </div>
-                    </div>
+            {/* GÖRÜNÜM 1: STITCH MÜCEVHER DETAY & MÜŞTERİ SUNUM EKRANI */}
+            {productViewMode === 'showcase' && (
+              <ProductPresentationShowcase
+                product={selectedShowcaseProduct || products[0]}
+                allProducts={products}
+                onSelectProduct={(p) => setSelectedShowcaseProduct(p)}
+                slots={slots}
+                goldPrice={goldPrice}
+                currentUser={currentUser}
+                onFastSale={(p) => {
+                  setSelectedProductForSale(p);
+                  setShowSaleModal(true);
+                }}
+              />
+            )}
 
-                    <div className="p-4">
-                      <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">{p.category} • {p.gold_color || 'Sarı Altın'}</div>
-                      <h3 className="font-bold text-sm text-white mt-0.5 line-clamp-1 hover:text-amber-300 cursor-pointer" onClick={() => handleOpenPresentation(p.id)}>
-                        {p.name}
-                      </h3>
-                      <div className="flex items-center justify-between text-xs text-slate-400 font-mono mt-1">
-                        <span>{p.weight_grams} gr</span>
-                        <span className="text-[11px] text-slate-300 italic">{p.craftsmanship_type || 'El İşçiliği'}</span>
-                      </div>
-                      <div className="text-base font-display font-bold text-amber-400 mt-2.5">
-                        {p.price.toLocaleString('tr-TR')} ₺
-                      </div>
-                    </div>
+            {/* GÖRÜNÜM 2: LÜKS KATALOG VE ARAMA LİSTESİ */}
+            {productViewMode === 'catalog' && (
+              <div className="space-y-4">
+                {/* Arama ve Filtre Çubuğu */}
+                <div className="bg-[#12141c] p-4 rounded-xl border border-[#242938] flex flex-col md:flex-row gap-3 items-center justify-between">
+                  <div className="relative w-full md:w-80">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Model adı veya barkod ile ara..."
+                      value={productSearchQuery}
+                      onChange={(e) => setProductSearchQuery(e.target.value)}
+                      className="w-full bg-[#0e1017] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                    />
                   </div>
 
-                  <div className="p-3 border-t border-[#242938] bg-[#0c0e14] flex items-center justify-between gap-1 text-xs">
-                    <button
-                      onClick={() => handleOpenPresentation(p.id)}
-                      className="btn-secondary text-[11px] py-1 px-2 flex-1 justify-center border-amber-500/30 hover:border-amber-400 text-amber-300"
-                    >
-                      👁️ Müşteriye Sun
-                    </button>
-                    {p.status !== 'Satıldı' && (
+                  <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto text-xs font-mono">
+                    <span className="text-slate-400 text-[11px] whitespace-nowrap">Kategori:</span>
+                    {['ALL', 'Bilezik', 'Yüzük', 'Kolye', 'Küpe', 'Set'].map(cat => (
                       <button
-                        onClick={() => { setSelectedProductForSale(p); setShowSaleModal(true); }}
-                        className="btn-gold text-[11px] py-1 px-3"
+                        key={cat}
+                        type="button"
+                        onClick={() => setProductCategoryFilter(cat)}
+                        className={`px-2.5 py-1 rounded-lg border transition whitespace-nowrap text-[11px] ${productCategoryFilter === cat ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold' : 'border-white/10 text-slate-400 hover:text-white'}`}
                       >
-                        Satış
+                        {cat === 'ALL' ? 'Tümü' : cat}
                       </button>
-                    )}
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto text-xs font-mono">
+                    <span className="text-slate-400 text-[11px] whitespace-nowrap">Ayar:</span>
+                    {['ALL', '24K', '22K', '18K', '14K'].map(pur => (
+                      <button
+                        key={pur}
+                        type="button"
+                        onClick={() => setProductPurityFilter(pur)}
+                        className={`px-2.5 py-1 rounded-lg border transition whitespace-nowrap text-[11px] ${productPurityFilter === pur ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold' : 'border-white/10 text-slate-400 hover:text-white'}`}
+                      >
+                        {pur === 'ALL' ? 'Tümü' : pur}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Ürün Kartları Izgarası */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {filteredCatalogProducts.map(p => (
+                    <div key={p.id} className="luxury-card overflow-hidden flex flex-col justify-between border border-[#242938] hover:border-amber-500/60 transition duration-300 group">
+                      <div>
+                        <div 
+                          className="relative cursor-pointer overflow-hidden bg-[#090a0e]" 
+                          onClick={() => {
+                            setSelectedShowcaseProduct(p);
+                            setProductViewMode('showcase');
+                          }}
+                        >
+                          {p.image_url ? (
+                            <img src={p.image_url} alt={p.name} className="w-full h-52 object-cover group-hover:scale-105 transition duration-500" />
+                          ) : (
+                            <div className="w-full h-52 bg-amber-500/10 flex items-center justify-center text-amber-400">
+                              <Sparkles className="w-10 h-10" />
+                            </div>
+                          )}
+                          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-sm text-amber-300 font-mono font-bold border border-amber-500/30">
+                              {p.purity} • {p.milyem || (p.purity === '22K' ? 916 : 585)}‰
+                            </span>
+                            {p.has_stones && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-950/90 backdrop-blur-sm text-indigo-300 font-bold border border-indigo-500/40">
+                                💎 {p.diamond_carat ? `${p.diamond_carat} ct` : 'Pırlanta'} {p.diamond_color || ''}
+                              </span>
+                            )}
+                          </div>
+                          <div className="absolute top-2.5 right-2.5">
+                            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-sm font-bold text-emerald-400 border border-emerald-500/30">
+                              ● {p.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="p-4 space-y-1">
+                          <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                            {p.category} • {p.gold_color || 'Sarı Altın'}
+                          </div>
+                          <h3 
+                            className="font-bold text-sm text-white line-clamp-1 hover:text-amber-300 cursor-pointer" 
+                            onClick={() => {
+                              setSelectedShowcaseProduct(p);
+                              setProductViewMode('showcase');
+                            }}
+                          >
+                            {p.name}
+                          </h3>
+                          <div className="flex items-center justify-between text-xs text-slate-400 font-mono pt-1">
+                            <span>{p.weight_grams} gr</span>
+                            <span className="text-[11px] text-amber-400/80 italic">{p.craftsmanship_type || 'El İşçiliği'}</span>
+                          </div>
+                          <div className="text-lg font-display font-bold text-amber-400 pt-1.5">
+                            {p.price?.toLocaleString('tr-TR')} ₺
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 border-t border-[#242938] bg-[#0c0e14] flex items-center justify-between gap-1.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedShowcaseProduct(p);
+                            setProductViewMode('showcase');
+                          }}
+                          className="btn-secondary text-[11px] py-1.5 px-2 flex-1 justify-center border-amber-500/30 hover:border-amber-400 text-amber-300"
+                        >
+                          👁️ Müşteriye Sun
+                        </button>
+                        {p.status !== 'Satıldı' && (
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedProductForSale(p); setShowSaleModal(true); }}
+                            className="btn-gold text-[11px] py-1.5 px-3 font-bold"
+                          >
+                            Satış
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -5719,325 +5976,14 @@ export default function Home() {
       )}
 
       {/* Yeni Ürün Modalı */}
-      {showAddProductModal && (
-        <div className="modal-overlay" onClick={() => setShowAddProductModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-3 border-b border-[#242938] mb-4">
-              <h3 className="font-cinzel text-base font-bold text-white">YENİ ALTIN ÜRÜN EKLE</h3>
-              <button onClick={() => setShowAddProductModal(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-
-            <form onSubmit={handleCreateProduct} className="space-y-3 text-xs max-h-[80vh] overflow-y-auto pr-1">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Barkod / RFID</label>
-                  <input
-                    type="text"
-                    required
-                    value={newProduct.barcode}
-                    onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
-                    placeholder="KYM-2024-..."
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Kategori</label>
-                  <select
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  >
-                    <option value="Yüzük">Yüzük</option>
-                    <option value="Bilezik">Bilezik</option>
-                    <option value="Kolye">Kolye</option>
-                    <option value="Küpe">Küpe</option>
-                    <option value="Set">Set</option>
-                    <option value="Ziynet">Ziynet / Yatırımlık</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Model / Ürün Adı</label>
-                <input
-                  type="text"
-                  required
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                  placeholder="22 Ayar Trabzon Hasırı Bilezik"
-                  className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                />
-              </div>
-
-              {/* Altın & Maden Özellikleri */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ayar</label>
-                  <select
-                    value={newProduct.purity}
-                    onChange={(e) => {
-                      const p = e.target.value;
-                      const m = p === '24K' ? 1000 : (p === '22K' ? 916 : (p === '18K' ? 750 : 585));
-                      setNewProduct({ ...newProduct, purity: p, milyem: m });
-                    }}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  >
-                    <option value="24K">24K (Has)</option>
-                    <option value="22K">22K</option>
-                    <option value="18K">18K</option>
-                    <option value="14K">14K</option>
-                    <option value="8K">8K</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Maden Rengi</label>
-                  <select
-                    value={newProduct.gold_color}
-                    onChange={(e) => setNewProduct({ ...newProduct, gold_color: e.target.value })}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  >
-                    <option value="Sarı Altın">Sarı Altın</option>
-                    <option value="Beyaz Altın">Beyaz Altın</option>
-                    <option value="Rose Altın">Rose (Pembe) Altın</option>
-                    <option value="Çift Renk">Çift Renk (Kombin)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ağırlık (gr)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={newProduct.weight_grams}
-                    onChange={(e) => setNewProduct({ ...newProduct, weight_grams: e.target.value })}
-                    placeholder="15.50"
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Fiyat & Maliyet */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Satış Fiyatı (₺)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    required
-                    value={newProduct.price}
-                    onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                    placeholder="45000"
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">İşçilik Bedeli (₺)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={newProduct.labor_cost}
-                    onChange={(e) => setNewProduct({ ...newProduct, labor_cost: e.target.value })}
-                    placeholder="1200"
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Alış Maliyeti (₺)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={newProduct.cost_price}
-                    onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })}
-                    placeholder="36000"
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* İşçilik Detayları */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">İşçilik Türü</label>
-                  <select
-                    value={newProduct.craftsmanship_type}
-                    onChange={(e) => setNewProduct({ ...newProduct, craftsmanship_type: e.target.value })}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  >
-                    <option value="El İşçiliği">El İşçiliği</option>
-                    <option value="Trabzon Hasırı (El Örgüsü)">Trabzon Hasırı</option>
-                    <option value="Telkari & Filigran">Telkari & Filigran</option>
-                    <option value="Lazer Kesim & Tel Çekme">Lazer Kesim</option>
-                    <option value="Döküm & Mikromıhlama">Döküm & Mikromıhlama</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Yüzey İşlemi</label>
-                  <select
-                    value={newProduct.surface_finish}
-                    onChange={(e) => setNewProduct({ ...newProduct, surface_finish: e.target.value })}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  >
-                    <option value="Parlak">Parlak (Ayna Cila)</option>
-                    <option value="Kum Saten">Kum Saten (Mat)</option>
-                    <option value="Kombin (Parlak & Mat)">Kombin (Parlak & Mat)</option>
-                    <option value="Oksitli / Eskitme">Oksitli / Eskitme</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Değerli Taş / Pırlanta Toggle & 4C Alanları */}
-              <div className="p-3 bg-[#0a0c10] rounded-lg border border-[#242938] space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-semibold flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={newProduct.has_stones}
-                      onChange={(e) => setNewProduct({ ...newProduct, has_stones: e.target.checked })}
-                      className="rounded text-amber-500"
-                    />
-                    <span>Üründe Pırlanta / Değerli Taş Var mı? (4C Standardı)</span>
-                  </label>
-                  {newProduct.has_stones && (
-                    <span className="text-[10px] text-amber-400 font-mono">4C Sertifikalı</span>
-                  )}
-                </div>
-
-                {newProduct.has_stones && (
-                  <div className="pt-2 border-t border-[#1e2330] space-y-2">
-                    <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Taş Türü</label>
-                        <select
-                          value={newProduct.gemstone_type}
-                          onChange={(e) => setNewProduct({ ...newProduct, gemstone_type: e.target.value })}
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        >
-                          <option value="Pırlanta">Pırlanta</option>
-                          <option value="Doğal Safir">Doğal Safir</option>
-                          <option value="Zümrüt">Zümrüt</option>
-                          <option value="Yakut">Yakut</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Karat (ct)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={newProduct.diamond_carat}
-                          onChange={(e) => setNewProduct({ ...newProduct, diamond_carat: e.target.value })}
-                          placeholder="0.50"
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Renk (Color)</label>
-                        <select
-                          value={newProduct.diamond_color}
-                          onChange={(e) => setNewProduct({ ...newProduct, diamond_color: e.target.value })}
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        >
-                          <option value="D">D (Ekstra Beyaz)</option>
-                          <option value="E">E (Ekstra Beyaz)</option>
-                          <option value="F">F (Nadir Beyaz)</option>
-                          <option value="G">G (Top Wesselton)</option>
-                          <option value="H">H (Wesselton)</option>
-                          <option value="I-J">I-J (Hafif Renkli)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Berraklık</label>
-                        <select
-                          value={newProduct.diamond_clarity}
-                          onChange={(e) => setNewProduct({ ...newProduct, diamond_clarity: e.target.value })}
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        >
-                          <option value="FL/IF">FL / IF (Kusursuz)</option>
-                          <option value="VVS1">VVS1</option>
-                          <option value="VVS2">VVS2</option>
-                          <option value="VS1">VS1</option>
-                          <option value="VS2">VS2</option>
-                          <option value="SI1">SI1</option>
-                          <option value="SI2">SI2</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Kesim (Cut)</label>
-                        <select
-                          value={newProduct.diamond_cut}
-                          onChange={(e) => setNewProduct({ ...newProduct, diamond_cut: e.target.value })}
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        >
-                          <option value="Excellent">Excellent (Mükemmel)</option>
-                          <option value="Very Good">Very Good (Çok İyi)</option>
-                          <option value="Good">Good (İyi)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Taş Şekli</label>
-                        <select
-                          value={newProduct.stone_shape}
-                          onChange={(e) => setNewProduct({ ...newProduct, stone_shape: e.target.value })}
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        >
-                          <option value="Yuvarlak (Brillant)">Yuvarlak (Brillant)</option>
-                          <option value="Baget">Baget</option>
-                          <option value="Prenses">Prenses</option>
-                          <option value="Zümrüt Kesim">Zümrüt Kesim</option>
-                          <option value="Damla">Damla</option>
-                          <option value="Oval">Oval</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 text-[10px] mb-0.5">Sertifika & No</label>
-                        <input
-                          type="text"
-                          value={newProduct.certificate_no}
-                          onChange={(e) => setNewProduct({ ...newProduct, certificate_no: e.target.value })}
-                          placeholder="HRD-2024-..."
-                          className="w-full bg-[#12141c] border border-[#242938] text-white rounded p-1.5 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Fotoğraf URL</label>
-                  <input
-                    type="text"
-                    value={newProduct.image_url}
-                    onChange={(e) => setNewProduct({ ...newProduct, image_url: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Asılacak Askı / Tabla</label>
-                  <select
-                    value={newProduct.slot_id}
-                    onChange={(e) => setNewProduct({ ...newProduct, slot_id: e.target.value })}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  >
-                    <option value="">-- Askıya Takma (Kasada Kalsın) --</option>
-                  {slots.map(s => (
-                    <option key={s.id} value={s.id}>#{s.slot_number} - {s.label} ({s.group_name})</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button type="submit" className="btn-gold w-full py-2.5 justify-center font-bold text-xs mt-2">
-                Ürünü Kaydet
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Sarraf Erdem Haute Joaillerie Lüks Mücevher Ekleme Modalı */}
+      <AddProductLuxuryModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onSubmit={handleCreateProduct}
+        slots={slots}
+        branches={branches}
+      />
 
       {/* Yeni Cihaz / Tabla Modalı */}
       {showAddSlotModal && (
@@ -6371,339 +6317,25 @@ export default function Home() {
       )}
 
       {/* ================= VIP MÜCEVHER MÜŞTERİ SUNUM EKRANI (SHOWCASE STORY / TABLET MODU) ================= */}
-      {showPresentationModal && presentationData && (
-        <div className="modal-overlay" onClick={() => setShowPresentationModal(false)}>
-          <div className="modal-content max-w-5xl bg-[#090b10] border-2 border-amber-500/50 text-slate-200 shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            {/* Üst Bar */}
-            <div className="flex items-center justify-between pb-4 border-b border-amber-500/30 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[11px] font-mono text-amber-400 font-bold uppercase tracking-widest">
-                    SARRAF ERDEM • VIP SHOWROOM SUNUM MODU
-                  </div>
-                  <h2 className="font-cinzel text-xl font-bold text-white tracking-wide">
-                    {presentationData.product.name}
-                  </h2>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-3 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold">
-                  {presentationData.product.barcode}
-                </span>
-                <button onClick={() => setShowPresentationModal(false)} className="text-slate-400 hover:text-white text-xl p-1">✕</button>
-              </div>
-            </div>
-
-            {/* İki Kolonlu Sunum Düzeni */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Sol Kolon: Fotoğraf & 360 Döner Açı & Büyüteç */}
-              <div className="lg:col-span-5 space-y-4">
-                <div className="relative bg-[#10131d] rounded-2xl border border-[#242938] overflow-hidden flex items-center justify-center min-h-[340px] group">
-                  {presentationData.product.image_url ? (
-                    <img
-                      src={presentationData.product.image_url}
-                      alt={presentationData.product.name}
-                      style={{
-                        transform: `rotate(${presentationAngle}deg) ${presentationZoom ? 'scale(1.4)' : 'scale(1)'}`,
-                        transition: 'transform 0.3s ease'
-                      }}
-                      className="max-h-[320px] object-contain p-4 cursor-pointer"
-                      onClick={() => setPresentationZoom(!presentationZoom)}
-                    />
-                  ) : (
-                    <div className="text-center p-8 text-amber-400/60">
-                      <Sparkles className="w-16 h-16 mx-auto mb-2" />
-                      <span className="text-xs">Görsel Yüklenmedi</span>
-                    </div>
-                  )}
-
-                  {/* Sol Rozetler */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                    <span className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur text-amber-300 font-mono text-xs font-bold border border-amber-500/40">
-                      {presentationData.product.purity} • {presentationData.product.milyem || 916}‰
-                    </span>
-                    <span className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur text-slate-200 text-xs font-semibold border border-slate-700">
-                      {presentationData.product.gold_color || 'Sarı Altın'}
-                    </span>
-                  </div>
-
-                  {/* Sağ Büyüteç Butonu */}
-                  <button
-                    onClick={() => setPresentationZoom(!presentationZoom)}
-                    className="absolute bottom-3 right-3 px-2.5 py-1.5 rounded-lg bg-black/80 text-white text-xs border border-white/20 hover:border-amber-400 flex items-center gap-1"
-                  >
-                    <span>{presentationZoom ? 'Normale Dön' : '🔍 Yakınlaştır'}</span>
-                  </button>
-                </div>
-
-                {/* 360 Döner Açı Kontrolü */}
-                <div className="p-3 bg-[#10131d] rounded-xl border border-[#242938] space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                      <span>360° Döner Açı İnceleme</span>
-                    </span>
-                    <span className="font-mono text-amber-400 font-bold">{presentationAngle}°</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="360"
-                    step="15"
-                    value={presentationAngle}
-                    onChange={(e) => setPresentationAngle(parseInt(e.target.value))}
-                    className="w-full accent-amber-500 cursor-pointer"
-                  />
-                </div>
-
-                {/* QR Kod ile Müşteri Cep Telefonuna Aktarma */}
-                <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/30 flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                      <QrCode className="w-4 h-4 text-amber-400" />
-                      <span>Mobil Paylaşım & Kaydetme</span>
-                    </div>
-                    <div className="text-[10px] text-slate-300">
-                      Müşteri telefon kamerasıyla okutup ürünü kaydedebilir.
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`https://sarraferdem.com/urun/${presentationData.product.barcode}`);
-                      alert("Mücevher detay linki panoya kopyalandı! WhatsApp ile gönderebilirsiniz.");
-                    }}
-                    className="btn-gold text-[10px] py-1 px-2.5"
-                  >
-                    Bağlantıyı Kopyala
-                  </button>
-                </div>
-              </div>
-
-              {/* Sağ Kolon: Sekmeli Detay & Fiyatlandırma Paneli */}
-              <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
-                {/* Sunum Sekmeleri */}
-                <div className="flex items-center gap-1 border-b border-[#242938] pb-2 text-xs">
-                  <button
-                    onClick={() => setPresentationActiveTab('overview')}
-                    className={`px-3 py-1.5 rounded-lg font-bold transition ${presentationActiveTab === 'overview' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    💎 Genel & Hikaye
-                  </button>
-                  {presentationData.product.has_stones && (
-                    <button
-                      onClick={() => setPresentationActiveTab('4c')}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition ${presentationActiveTab === '4c' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}
-                    >
-                      ✨ 4C Pırlanta Standardı
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setPresentationActiveTab('pricing')}
-                    className={`px-3 py-1.5 rounded-lg font-bold transition ${presentationActiveTab === 'pricing' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    💰 Şeffaf Fiyat Dökümü
-                  </button>
-                  <button
-                    onClick={() => setPresentationActiveTab('care')}
-                    className={`px-3 py-1.5 rounded-lg font-bold transition ${presentationActiveTab === 'care' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    🛡️ Bakım & Garanti
-                  </button>
-                </div>
-
-                {/* Sekme 1: Genel & Hikaye */}
-                {presentationActiveTab === 'overview' && (
-                  <div className="space-y-3 text-xs">
-                    <p className="text-slate-300 leading-relaxed bg-[#10131d] p-3 rounded-xl border border-[#242938]">
-                      {presentationData.product.description || "Sarraf Erdem özel koleksiyonundan usta kuyumcu işçiliğiyle üretilmiş eşsiz mücevher parçası."}
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-[#242938] space-y-1">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold">Maden & Saflık</div>
-                        <div className="text-white font-bold text-sm">{presentationData.product.purity} ({presentationData.product.milyem || 916} Milyem)</div>
-                        <div className="text-amber-400 font-mono">{presentationData.product.gold_color || 'Sarı Altın'}</div>
-                        <div className="text-slate-400 text-[11px] mt-1">Brüt Ağırlık: <strong className="text-white">{presentationData.product.weight_grams} gr</strong></div>
-                        <div className="text-emerald-400 text-[11px]">Net Has Altın: <strong>{presentationData.has_gold_grams} gr</strong></div>
-                      </div>
-
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-[#242938] space-y-1">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold">İşçilik & Sanat Ekolü</div>
-                        <div className="text-white font-bold text-sm">{presentationData.product.craftsmanship_type || 'El İşçiliği'}</div>
-                        <div className="text-slate-300">{presentationData.product.surface_finish || 'Parlak Cila'}</div>
-                        <div className="text-slate-400 text-[11px] mt-1">Menşei: {presentationData.product.workshop_origin || 'Kapalıçarşı Atölyesi'}</div>
-                        <div className="text-indigo-300 text-[11px]">Ölçü/Beden: {presentationData.product.size_or_length || 'Standart Ölçü'}</div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-[#10131d] rounded-xl border border-[#242938] flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Award className="w-5 h-5 text-amber-400" />
-                        <div>
-                          <div className="font-bold text-white">Darphane ve Damga Matbaası Tescilli</div>
-                          <div className="text-[10px] text-slate-400">Resmi ayar damgası ve mikroskopik lazer mühür kontrolü yapılmıştır.</div>
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/40">
-                        ✓ Orijinal Tescil
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Sekme 2: 4C Pırlanta Standardı */}
-                {presentationActiveTab === '4c' && presentationData.product.has_stones && (
-                  <div className="space-y-4 text-xs">
-                    <div className="grid grid-cols-4 gap-2">
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-indigo-500/40 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold">Carat (Ağırlık)</div>
-                        <div className="font-display text-xl font-bold text-white mt-1">
-                          {presentationData.product.diamond_carat ? `${presentationData.product.diamond_carat} ct` : '0.45 ct'}
-                        </div>
-                        <div className="text-[10px] text-indigo-300 font-mono mt-0.5">Hassas Taş</div>
-                      </div>
-
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-indigo-500/40 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold">Color (Renk)</div>
-                        <div className="font-display text-xl font-bold text-amber-400 mt-1">
-                          {presentationData.product.diamond_color || 'F'}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">Ekstra Beyaz</div>
-                      </div>
-
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-indigo-500/40 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold">Clarity (Berraklık)</div>
-                        <div className="font-display text-xl font-bold text-emerald-400 mt-1">
-                          {presentationData.product.diamond_clarity || 'VS1'}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">Çok Küçük Lekeli</div>
-                      </div>
-
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-indigo-500/40 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold">Cut (Kesim)</div>
-                        <div className="font-display text-base font-bold text-white mt-1 line-clamp-1">
-                          {presentationData.product.diamond_cut || 'Excellent'}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">Maksimum Parlaklık</div>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 bg-[#10131d] rounded-xl border border-[#242938] space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-white">Taş Kesim Şekli:</span>
-                        <span className="text-amber-300 font-semibold">{presentationData.product.stone_shape || 'Yuvarlak (Brillant Cut)'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-white">Uluslararası Sertifika:</span>
-                        <span className="text-white font-mono bg-[#191c26] px-2 py-0.5 rounded border border-[#242938]">
-                          {presentationData.product.stone_certificate || 'HRD Antwerp / GIA'}
-                        </span>
-                      </div>
-                      {presentationData.product.certificate_no && (
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-white">Sertifika Takip No:</span>
-                          <span className="text-emerald-400 font-mono font-bold">{presentationData.product.certificate_no}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sekme 3: Şeffaf Fiyatlandırma Dökümü */}
-                {presentationActiveTab === 'pricing' && (
-                  <div className="space-y-3 text-xs">
-                    <div className="p-4 bg-[#10131d] rounded-xl border border-amber-500/30 space-y-2">
-                      <div className="flex items-center justify-between border-b border-[#242938] pb-2">
-                        <span className="text-slate-400">Has Altın Bedeli ({presentationData.has_gold_grams} gr × {presentationData.current_gold_rate.toLocaleString('tr-TR')} ₺):</span>
-                        <span className="font-mono text-white font-bold">{presentationData.has_gold_value_tl.toLocaleString('tr-TR')} ₺</span>
-                      </div>
-                      <div className="flex items-center justify-between border-b border-[#242938] pb-2">
-                        <span className="text-slate-400">Usta İşçilik & Tasarım Bedeli:</span>
-                        <span className="font-mono text-white font-bold">{presentationData.labor_cost_tl.toLocaleString('tr-TR')} ₺</span>
-                      </div>
-                      {presentationData.stone_value_tl > 0 && (
-                        <div className="flex items-center justify-between border-b border-[#242938] pb-2">
-                          <span className="text-slate-400">Değerli Taş & Pırlanta Bedeli:</span>
-                          <span className="font-mono text-indigo-300 font-bold">{presentationData.stone_value_tl.toLocaleString('tr-TR')} ₺</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-sm font-bold text-amber-400">Genel Toplam Tutar:</span>
-                        <span className="text-xl font-display font-bold text-white">
-                          {presentationData.total_price_tl.toLocaleString('tr-TR')} ₺
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-emerald-400/90 pt-1">
-                        * KDV Kanunu 17/4-g uyarınca has altın bedeli KDV'den muaftır.
-                      </div>
-                    </div>
-
-                    {/* Taksit Seçenekleri */}
-                    <div className="grid grid-cols-4 gap-2">
-                      {presentationData.installment_plans.map(plan => (
-                        <div key={plan.installment_count} className="p-2.5 bg-[#10131d] rounded-lg border border-[#242938] text-center">
-                          <div className="text-[10px] text-slate-400 font-bold">{plan.installment_count === 1 ? 'Tek Çekim' : `${plan.installment_count} Taksit`}</div>
-                          <div className="font-bold text-white text-xs mt-1">{plan.monthly_amount.toLocaleString('tr-TR')} ₺/ay</div>
-                          <div className="text-[9px] text-slate-500 mt-0.5">{plan.description}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sekme 4: Bakım & Garanti */}
-                {presentationActiveTab === 'care' && (
-                  <div className="space-y-3 text-xs">
-                    <div className="p-4 bg-[#10131d] rounded-xl border border-[#242938] space-y-2">
-                      <div className="font-bold text-white text-sm flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-amber-400" />
-                        <span>Mücevher Bakım & Kullanım Talimatı</span>
-                      </div>
-                      <p className="text-slate-300 leading-relaxed">
-                        {presentationData.product.care_instructions || "Parfüm, çamaşır suyu ve kimyasallardan uzak tutunuz. Ilık sabunlu su ve yumuşak mikrofiber bezle temizleyiniz."}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-[#242938] space-y-1">
-                        <div className="font-bold text-white">Ömür Boyu Ücretsiz Bakım</div>
-                        <div className="text-slate-400 text-[11px]">Yılda 1 kez ücretsiz profesyonel ultrasonik yıkama ve cila hizmeti.</div>
-                      </div>
-                      <div className="p-3 bg-[#10131d] rounded-xl border border-[#242938] space-y-1">
-                        <div className="font-bold text-white">Ölçü & Gravür Garantisi</div>
-                        <div className="text-slate-400 text-[11px]">İlk 6 ay içinde ücretsiz yüzük boyu ayarı ve lazer isim gravürü.</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Alt Aksiyon Butonları */}
-                <div className="pt-4 border-t border-[#242938] flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => setShowPresentationModal(false)}
-                    className="btn-secondary text-xs py-2.5 px-4"
-                  >
-                    Kapat
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setShowPresentationModal(false);
-                        setSelectedProductForSale(presentationData.product);
-                        setShowSaleModal(true);
-                      }}
-                      className="btn-gold text-xs py-2.5 px-5 font-bold flex items-center gap-2"
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      <span>Bu Ürünün Satışını Başlat</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* ================= VIP MÜCEVHER MÜŞTERİ SUNUM EKRANI MODALI ================= */}
+      {showPresentationModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto" onClick={() => setShowPresentationModal(false)}>
+          <div className="w-full max-w-6xl my-auto" onClick={e => e.stopPropagation()}>
+            <ProductPresentationShowcase
+              product={selectedShowcaseProduct || presentationData?.product || products[0]}
+              allProducts={products}
+              onSelectProduct={setSelectedShowcaseProduct}
+              slots={slots}
+              goldPrice={goldPrice}
+              currentUser={currentUser}
+              onFastSale={(p) => {
+                setShowPresentationModal(false);
+                setSelectedProductForSale(p);
+                setShowSaleModal(true);
+              }}
+              onClose={() => setShowPresentationModal(false)}
+              isModal={true}
+            />
           </div>
         </div>
       )}
