@@ -1,0 +1,237 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold-300: #fde047;
+  --gold-400: #facc15;
+  --gold-500: #eab308;
+  --gold-600: #d4af37;
+  --gold-700: #b38b14;
+  --gold-800: #854d0e;
+  --gold-900: #554300;
+
+  --surface-dark: #0b0c10;
+  --surface-card: #12141c;
+  --surface-card-high: #191c26;
+  --surface-border: #242938;
+
+  --status-normal: #10b981;
+  --status-inspection: #f59e0b;
+  --status-alert: #ef4444;
+
+  --font-cinzel: 'Cinzel', serif;
+  --font-display: 'Playfair Display', serif;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--surface-dark);
+  color: #f8fafc;
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* Tipografi */
+.font-cinzel {
+  font-family: var(--font-cinzel);
+}
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Altın Degrade Metin */
+.gold-gradient-text {
+  background: linear-gradient(135deg, #fde047 0%, #d4af37 50%, #b38b14 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-gradient-subtle {
+  background: linear-gradient(135deg, #fef08a 0%, #eab308 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Lüks Butonlar */
+.btn-gold {
+  background: linear-gradient(135deg, #facc15 0%, #d4af37 50%, #b38b14 100%);
+  color: #0b0c10;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.25);
+}
+.btn-gold:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.35);
+}
+
+.btn-secondary {
+  background: #191c26;
+  color: #cbd5e1;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.btn-secondary:hover {
+  background: #222634;
+  color: #ffffff;
+  border-color: #3b4259;
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+.btn-danger:hover {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+/* Kart Vurguları */
+.luxury-card {
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.luxury-card:hover {
+  border-color: rgba(212, 175, 55, 0.35);
+}
+
+/* Alarm Animasyonu */
+@keyframes pulseAlert {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    border-color: #ef4444;
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+    border-color: #f87171;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    border-color: #ef4444;
+  }
+}
+
+.alert-card-pulse {
+  animation: pulseAlert 1.5s infinite;
+  background-color: #2b1115 !important;
+  border-color: #ef4444 !important;
+}
+
+@keyframes bannerBlink {
+  0%, 100% { background-color: #991b1b; }
+  50% { background-color: #b91c1c; }
+}
+.alert-banner-blink {
+  animation: bannerBlink 0.8s infinite;
+}
+
+/* Modallar */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #12141c;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  width: 90%;
+  max-width: 540px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+}
+
+/* Finansal Grafik ve Çubuk Grafiği Stilleri */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  background: rgba(11, 12, 16, 0.6);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chart-grid-line {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-dasharray: 4 4;
+}
+
+.chart-line {
+  fill: none;
+  stroke: #d4af37;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.5));
+}
+
+.chart-area {
+  fill: url(#goldGradientFill);
+  opacity: 0.25;
+}
+
+/* @media print - Gün Sonu Kasa Raporu A4 Çıktısı */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-report, #printable-report * {
+    visibility: visible;
+  }
+  #printable-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000000 !important;
+    background: #ffffff !important;
+    padding: 20px;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
