@@ -300,6 +300,7 @@ class LiftCandidate(BaseModel):
     matched_variants_desc: Optional[str] = None
     variant_ids: List[int] = []
     has_variants: bool = False
+    average_grams_per_unit: float = 0.0
 
 class IdentifyLiftResponse(BaseModel):
     slot_number: int

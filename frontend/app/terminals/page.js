@@ -448,9 +448,14 @@ export default function TerminalsPage() {
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-mono text-[11px] font-bold text-slate-400 bg-black/40 px-2 py-0.5 rounded border border-[#242938]">
-                            {p.barcode}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[11px] font-bold text-slate-400 bg-black/40 px-2 py-0.5 rounded border border-[#242938]">
+                              {p.barcode}
+                            </span>
+                            <span className="text-[11px] font-mono font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded shadow-sm">
+                              {p.stock_quantity || 1} Adet
+                            </span>
+                          </div>
                           <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
                             {p.purity} • {p.milyem || (p.purity === '22K' ? 916 : 585)}‰
                           </span>

@@ -3032,30 +3032,36 @@ export default function Home() {
                       <div className="my-2 space-y-2">
                         {activeProds.length > 0 ? (
                           activeProds.map(prod => (
-                            <div key={prod.id} className="flex items-center justify-between p-2 bg-[#0e1017] rounded-lg border border-[#242938]">
-                              <div className="flex items-center gap-2 min-w-0">
+                            <div key={prod.id} className="flex items-center justify-between p-2.5 bg-[#0e1017] rounded-lg border border-[#242938] hover:border-amber-500/40 transition">
+                              <div className="flex items-center gap-2.5 min-w-0">
                                 {prod.image_url ? (
-                                  <img src={prod.image_url} alt={prod.name} className="w-9 h-9 object-cover rounded border border-[#242938]" />
+                                  <img src={prod.image_url} alt={prod.name} className="w-10 h-10 object-cover rounded border border-[#242938]" />
                                 ) : (
-                                  <div className="w-9 h-9 rounded bg-amber-500/10 flex items-center justify-center text-amber-400">
+                                  <div className="w-10 h-10 rounded bg-amber-500/10 flex items-center justify-center text-amber-400">
                                     <Sparkles className="w-4 h-4" />
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <div className="text-xs font-bold text-white truncate">{prod.name}</div>
-                                  <div className="text-[10px] text-amber-400 font-mono">
-                                    {prod.purity} • {prod.weight_grams} gr
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-bold text-white truncate">{prod.name}</span>
+                                    <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm">
+                                      {prod.stock_quantity || 1} Adet
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-amber-400 font-mono mt-0.5">
+                                    {prod.purity} • Birim {prod.weight_grams} gr {((prod.stock_quantity || 1) > 1) ? `• Toplam ${((prod.weight_grams || 0) * (prod.stock_quantity || 1)).toFixed(2)} gr` : ''}
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right shrink-0">
+                              <div className="text-right shrink-0 ml-2">
                                 <div className="text-xs font-display font-bold text-white">{prod.price.toLocaleString('tr-TR')} ₺</div>
                                 <button
                                   onClick={() => handleTakeIntoCustody(prod.id, slot.id)}
-                                  className="text-[10px] text-amber-400 hover:text-amber-300 underline font-semibold"
+                                  className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold px-2 py-1 bg-amber-500/10 rounded border border-amber-500/30 hover:bg-amber-500/20 transition mt-1 flex items-center gap-1"
                                   title="Müşteriye denetmek için masaya al"
                                 >
-                                  Masaya Al ➔
+                                  <span>Masaya Al</span>
+                                  <span>➔</span>
                                 </button>
                               </div>
                             </div>
@@ -3068,14 +3074,43 @@ export default function Home() {
 
                         {/* Masada Denetlenen Ürünler (Zimmet) */}
                         {custodyProds.length > 0 && (
-                          <div className="p-2 rounded bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-300">
-                            <strong>Müşteri Masasında:</strong>
-                            {custodyProds.map(cp => (
-                              <div key={cp.id} className="flex items-center justify-between mt-1">
-                                <span>• {cp.name} ({cp.weight_grams} gr)</span>
-                                <span className="text-[10px] text-slate-400">Denetiliyor</span>
-                              </div>
-                            ))}
+                          <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-300 space-y-1.5">
+                            <div className="flex items-center justify-between font-semibold border-b border-amber-500/20 pb-1">
+                              <span className="flex items-center gap-1">
+                                <span>👑</span>
+                                <span>Müşteri Masasında (Denetimde):</span>
+                              </span>
+                              <span className="text-[10px] font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-200 font-bold">
+                                {custodyProds.reduce((sum, cp) => sum + (cp.stock_quantity || 1), 0)} Adet Alındı
+                              </span>
+                            </div>
+                            {custodyProds.map(cp => {
+                              const qty = cp.stock_quantity || 1;
+                              const totalGrams = cp.weight_grams || 0;
+                              const avgGrams = qty > 0 ? (totalGrams / qty).toFixed(2) : totalGrams.toFixed(2);
+                              return (
+                                <div key={cp.id} className="flex items-center justify-between text-[11px] bg-black/40 p-1.5 rounded border border-amber-500/20">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-white truncate">• {cp.name}</span>
+                                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold text-[10px] border border-emerald-500/30">
+                                        {qty} Adet Alındı
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] font-mono text-amber-300/90 mt-0.5">
+                                      Ortalama: <strong>{avgGrams} gr / adet</strong> • Toplam: <strong>{totalGrams.toFixed(2)} gr</strong>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleReturnToRack(cp.id)}
+                                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold shrink-0 ml-2 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30"
+                                    title="Askıya Geri Koy"
+                                  >
+                                    Geri Koy ↺
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -3207,11 +3242,27 @@ export default function Home() {
                         </div>
                       )}
 
-                      <h3 className="font-bold text-sm text-white">{item.name}</h3>
-                      <div className="text-xs text-slate-400 font-mono mt-1">
-                        Ağırlık: <strong className="text-white">{item.weight_grams} gr</strong>
+                      <div className="flex items-center justify-between gap-1.5 mt-1">
+                        <h3 className="font-bold text-sm text-white truncate">{item.name}</h3>
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold text-[11px] border border-emerald-500/40 shrink-0">
+                          {item.stock_quantity || 1} Adet Alındı
+                        </span>
                       </div>
-                      <div className="text-lg font-bold font-display text-amber-400 mt-1">
+
+                      <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 text-[11px] font-mono mt-1.5 space-y-0.5">
+                        <div className="text-slate-300 flex justify-between items-center">
+                          <span>Ortalama Gramaj:</span>
+                          <strong className="text-amber-300 font-bold">
+                            {((item.weight_grams || 0) / Math.max(1, item.stock_quantity || 1)).toFixed(2)} gr / adet
+                          </strong>
+                        </div>
+                        <div className="text-slate-400 flex justify-between items-center text-[10px]">
+                          <span>Toplam Masadaki Ağırlık:</span>
+                          <strong className="text-white">{item.weight_grams} gr</strong>
+                        </div>
+                      </div>
+
+                      <div className="text-lg font-bold font-display text-amber-400 mt-2">
                         {item.price.toLocaleString('tr-TR')} ₺
                       </div>
                     </div>
@@ -5748,7 +5799,7 @@ export default function Home() {
 
       </main>
 
-      {/* ================= MODAL 1: AKILLI GRAMAJ EŞLEME & ZİMMETE ALMA SİHİRBAZI ================= */}
+      {/* ================= MODAL 1: AKILLI GRAMAJ EŞLEŞME & ZİMMETE ALMA SİHİRBAZI ================= */}
       {liftMatchWizard && (
         <div className="modal-overlay">
           <div className="modal-content max-w-lg border-rose-500/50 shadow-2xl">
@@ -5756,7 +5807,7 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-rose-500 animate-bounce" />
                 <h3 className="font-cinzel text-base font-bold text-white">
-                  ASKI #{liftMatchWizard.slot_number}'DEN AĞIRLIK EKSİLDİ!
+                  ASKI #{liftMatchWizard.slot_number}'den AĞIRLIK EKSİLDİ!
                 </h3>
               </div>
               <button onClick={() => setLiftMatchWizard(null)} className="text-slate-400 hover:text-white">✕</button>
@@ -5765,13 +5816,13 @@ export default function Home() {
             {/* Üst Eksilen Bilgi Kartı */}
             <div className="p-3.5 rounded-xl bg-gradient-to-r from-rose-950/50 via-[#1e131d] to-rose-950/30 border border-rose-500/50 text-xs mb-4">
               <div className="flex items-center justify-between font-mono">
-                <span className="text-slate-300">Sensörün Ölçtüğü Net Eksilme:</span>
+                <span className="text-slate-300">IoT Sensörünün Ölçtüğü Net Eksilme:</span>
                 <span className="px-2.5 py-1 rounded bg-rose-900/60 border border-rose-500/60 text-rose-200 text-sm font-bold">
                   {liftMatchWizard.weight_lost} gr
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 mt-1.5 leading-relaxed">
-                Yoğun saatlerde zaman kaybetmemeniz için sistem askıdaki stok ve varyant gramaj kombinasyonlarını otomatik eşleştirdi.
+                Yoğun saatlerde zaman kaybetmemeniz için IoT sensöründen gelen ağırlık düşüşü analiz edildi ve kaldırılan ürün adedi ile ortalama gramaj hesaplandı.
               </p>
             </div>
 
@@ -5779,14 +5830,18 @@ export default function Home() {
             {liftMatchWizard.candidates && liftMatchWizard.candidates.length > 0 && (() => {
               const best = liftMatchWizard.candidates[0];
               const remainingStock = Math.max(0, (best.stock_available || 1) - (best.estimated_quantity || 1));
+              const avgGrams = (liftMatchWizard.weight_lost / Math.max(1, (best.estimated_quantity || 1))).toFixed(2);
               return (
                 <div className="p-4 rounded-xl bg-gradient-to-b from-emerald-950/40 via-[#101b17] to-[#12141c] border-2 border-emerald-500/80 shadow-xl mb-4 relative overflow-hidden">
                   <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-bold font-mono text-[10px]">
                     %{best.confidence_score} En Yüksek Uyum
                   </div>
 
-                  <div className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider mb-1">
-                    ⚡ ÖNERİLEN AKILLI EŞLEŞME
+                  <div className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <span>⚡ ÖNERİLEN AKILLI EŞLEŞME</span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px]">
+                      {best.estimated_quantity} Adet Alındı
+                    </span>
                   </div>
 
                   <div className="flex items-start gap-3 mt-1">
@@ -5799,10 +5854,24 @@ export default function Home() {
                     )}
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-sm text-white truncate">{best.product_name}</h4>
-                      <div className="text-xs text-amber-300 font-mono font-semibold mt-0.5">
-                        {best.matched_variants_desc || `${best.estimated_quantity} Adet • ${best.total_calculated_weight} gr`}
+                      
+                      {/* IoT Ortalama Gramaj ve Adet Bilgisi */}
+                      <div className="p-2 rounded-lg bg-black/50 border border-emerald-500/30 text-[11px] font-mono mt-1.5 space-y-0.5">
+                        <div className="text-emerald-300 font-bold flex items-center justify-between">
+                          <span>Kaldırılan Miktar:</span>
+                          <span className="text-amber-300 font-bold">{best.estimated_quantity} Adet Alındı</span>
+                        </div>
+                        <div className="text-slate-300 flex items-center justify-between">
+                          <span>Ortalama Birim Gramaj:</span>
+                          <span className="text-white font-bold">{avgGrams} gr / adet</span>
+                        </div>
+                        <div className="text-slate-400 flex items-center justify-between border-t border-white/10 pt-0.5 text-[10px]">
+                          <span>Toplam Sensör Eksilmesi:</span>
+                          <span className="text-rose-300">{liftMatchWizard.weight_lost} gr</span>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+
+                      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
                         <span>Fark: <strong className="text-emerald-300">±{best.diff_grams}g</strong></span>
                         <span>•</span>
                         <span>Askıda Kalan: <strong className="text-white">{remainingStock} Adet</strong></span>
@@ -5816,8 +5885,8 @@ export default function Home() {
                     className="w-full mt-3.5 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition active:scale-[0.99]"
                   >
                     <span>⚡</span>
-                    <span>Bu {best.estimated_quantity} Adedi Tek Tıkla Masama Al (Alarmı Kapat)</span>
-                    <span className="font-mono text-[11px] opacity-80">({best.total_calculated_weight}g)</span>
+                    <span>Bu {best.estimated_quantity} Adet Alındı Olarak Masama Al</span>
+                    <span className="font-mono text-[11px] opacity-90">(Ort. {avgGrams} gr/adet)</span>
                   </button>
                 </div>
               );
@@ -5830,41 +5899,49 @@ export default function Home() {
                   Diğer Olası Askı Eşleşmeleri:
                 </div>
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {liftMatchWizard.candidates.slice(1).map(candidate => (
-                    <div
-                      key={candidate.product_id}
-                      onClick={() => handleTakeCandidateIntoCustody(candidate, liftMatchWizard.slot_id)}
-                      className="p-3 bg-[#161822] hover:bg-amber-500/10 border border-[#242938] hover:border-amber-500/50 rounded-xl cursor-pointer transition flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {candidate.image_url ? (
-                          <img src={candidate.image_url} alt={candidate.product_name} className="w-10 h-10 object-cover rounded-lg border border-[#242938] shrink-0" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 font-bold shrink-0">
-                            🪙
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs text-white truncate">{candidate.product_name}</div>
-                          <div className="text-[11px] text-amber-400 font-mono">
-                            {candidate.matched_variants_desc || `${candidate.estimated_quantity} Adet • ${candidate.total_calculated_weight} gr`}
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            Fark: ±{candidate.diff_grams}g • {candidate.price?.toLocaleString('tr-TR')} ₺
+                  {liftMatchWizard.candidates.slice(1).map(candidate => {
+                    const cAvg = (liftMatchWizard.weight_lost / Math.max(1, candidate.estimated_quantity || 1)).toFixed(2);
+                    return (
+                      <div
+                        key={candidate.product_id}
+                        onClick={() => handleTakeCandidateIntoCustody(candidate, liftMatchWizard.slot_id)}
+                        className="p-3 bg-[#161822] hover:bg-amber-500/10 border border-[#242938] hover:border-amber-500/50 rounded-xl cursor-pointer transition flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {candidate.image_url ? (
+                            <img src={candidate.image_url} alt={candidate.product_name} className="w-10 h-10 object-cover rounded-lg border border-[#242938] shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 font-bold shrink-0">
+                              🪙
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-xs text-white truncate">{candidate.product_name}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[10px] border border-amber-500/30">
+                                {candidate.estimated_quantity} Adet Alındı
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-amber-300 font-mono mt-0.5">
+                              Ortalama: <strong>{cAvg} gr / adet</strong> • Toplam: <strong>{candidate.total_calculated_weight} gr</strong>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              Fark: ±{candidate.diff_grams}g • {candidate.price?.toLocaleString('tr-TR')} ₺
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="text-right shrink-0 ml-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-800 text-slate-300">
-                          %{candidate.confidence_score} Uyum
-                        </span>
-                        <button className="btn-secondary text-[10px] py-1 px-2 mt-1.5 block ml-auto">
-                          Seç & Zimmetle ➔
-                        </button>
+                        <div className="text-right shrink-0 ml-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-800 text-slate-300">
+                            %{candidate.confidence_score} Uyum
+                          </span>
+                          <button className="btn-secondary text-[10px] py-1 px-2 mt-1.5 block ml-auto font-bold text-amber-400">
+                            Seç ➔
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -7004,23 +7081,30 @@ export default function Home() {
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-[#0e1017] rounded-lg border border-[#242938]">
                 <div className="font-bold text-white text-sm">{takeCustodyModal.product?.name}</div>
-                <div className="flex items-center justify-between mt-1 text-slate-400">
-                  <span>Birim Ağırlık:</span>
-                  <span className="font-mono text-amber-400 font-bold">{takeCustodyModal.product?.weight_grams} gr</span>
-                </div>
-                <div className="flex items-center justify-between mt-1 text-slate-400">
-                  <span>Askıda Mevcut Adet:</span>
-                  <span className="font-mono text-emerald-400 font-bold">{takeCustodyModal.maxQty} Adet</span>
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-[#242938] text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block">Birim Ağırlık:</span>
+                    <span className="font-mono text-amber-400 font-bold">{takeCustodyModal.product?.weight_grams} gr / adet</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Askıdaki Mevcut Stok:</span>
+                    <span className="font-mono text-emerald-400 font-bold">{takeCustodyModal.maxQty} Adet</span>
+                  </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1.5">Kaç adet masaya / zimmete alacaksınız?</label>
+                <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">
+                  <span>Kaç adet masaya / zimmete alacaksınız?</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold font-mono text-[11px] border border-emerald-500/40">
+                    {takeCustodyModal.selectedQty} Adet Alındı
+                  </span>
+                </label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setTakeCustodyModal(prev => ({ ...prev, selectedQty: Math.max(1, (prev.selectedQty || 1) - 1) }))}
-                    className="w-8 h-8 rounded bg-[#191c26] border border-[#242938] text-white font-bold text-base hover:bg-amber-500/20"
+                    className="w-10 h-10 rounded-lg bg-[#191c26] border border-[#242938] text-white font-bold text-lg hover:bg-amber-500/20 active:scale-95 transition"
                   >
                     -
                   </button>
@@ -7033,39 +7117,52 @@ export default function Home() {
                       const v = parseInt(e.target.value) || 1;
                       setTakeCustodyModal(prev => ({ ...prev, selectedQty: Math.min(prev.maxQty, Math.max(1, v)) }));
                     }}
-                    className="flex-1 text-center bg-[#0e1017] border border-[#242938] text-amber-400 font-bold font-mono text-base rounded p-1.5 focus:outline-none"
+                    className="flex-1 text-center bg-[#0e1017] border border-[#242938] text-amber-400 font-bold font-mono text-lg rounded-lg p-2 focus:outline-none focus:border-amber-500"
                   />
                   <button
                     type="button"
                     onClick={() => setTakeCustodyModal(prev => ({ ...prev, selectedQty: Math.min(prev.maxQty, (prev.selectedQty || 1) + 1) }))}
-                    className="w-8 h-8 rounded bg-[#191c26] border border-[#242938] text-white font-bold text-base hover:bg-amber-500/20"
+                    className="w-10 h-10 rounded-lg bg-[#191c26] border border-[#242938] text-white font-bold text-lg hover:bg-amber-500/20 active:scale-95 transition"
                   >
                     +
                   </button>
                 </div>
+                <div className="flex justify-between text-[11px] text-slate-400 mt-1.5 px-1 font-mono">
+                  <span>Askıda Kalacak: <strong className="text-white">{Math.max(0, takeCustodyModal.maxQty - (takeCustodyModal.selectedQty || 1))} Adet</strong></span>
+                  <span>Alınan: <strong className="text-emerald-400">{takeCustodyModal.selectedQty} Adet</strong></span>
+                </div>
               </div>
 
-              <div className="p-2 bg-amber-950/20 border border-amber-500/20 rounded flex justify-between items-center text-[11px]">
-                <span className="text-slate-300">Askıdan Eksilecek Toplam Yük:</span>
-                <span className="font-mono font-bold text-amber-400">
-                  {((takeCustodyModal.product?.weight_grams || 0) * (takeCustodyModal.selectedQty || 1)).toFixed(2)} gr
-                </span>
+              {/* IoT Sensör Hesaplama Bilgisi */}
+              <div className="p-3 bg-gradient-to-r from-amber-950/30 via-[#1c1815] to-[#12141c] border border-amber-500/40 rounded-lg space-y-1 text-[11px]">
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>Sensör Ortalama Ağırlık:</span>
+                  <span className="font-mono font-bold text-amber-300">
+                    {(takeCustodyModal.product?.weight_grams || 0).toFixed(2)} gr / adet
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-t border-amber-500/20 pt-1 text-slate-200">
+                  <span className="font-semibold">Askıdan Eksilecek Toplam Yük:</span>
+                  <span className="font-mono font-bold text-amber-400 text-xs">
+                    {((takeCustodyModal.product?.weight_grams || 0) * (takeCustodyModal.selectedQty || 1)).toFixed(2)} gr
+                  </span>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setTakeCustodyModal(null)}
-                  className="btn-secondary flex-1 py-2 justify-center"
+                  className="btn-secondary flex-1 py-2.5 justify-center"
                 >
                   İptal
                 </button>
                 <button
                   type="button"
                   onClick={() => executeTakeIntoCustody(takeCustodyModal.productId, takeCustodyModal.slotId, takeCustodyModal.selectedQty)}
-                  className="btn-gold flex-1 py-2 justify-center font-bold"
+                  className="btn-gold flex-1 py-2.5 justify-center font-bold text-xs"
                 >
-                  {takeCustodyModal.selectedQty} Adet Zimmete Al
+                  ✓ {takeCustodyModal.selectedQty} Adet Alındı Olarak Masama Al
                 </button>
               </div>
             </div>

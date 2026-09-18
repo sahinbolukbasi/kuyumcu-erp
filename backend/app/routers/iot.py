@@ -107,7 +107,8 @@ def identify_lift_candidates(
                 else:
                     score = max(10, int(100 - (best_diff * 10)))
 
-                variant_desc = f"{qty} Adet: " + " + ".join([f"{v.weight_grams:.2f}g ({v.size_or_length or v.color})" for v in best_combo])
+                comb_avg = round(comb_weight / qty, 2)
+                variant_desc = f"{qty} Adet Alındı • Ortalama {comb_avg:.2f} gr/adet (" + " + ".join([f"{v.weight_grams:.2f}g" for v in best_combo]) + f" = {comb_weight:.2f} gr)"
                 unit_price = p.price or 0.0
                 total_est_price = round(unit_price * qty, 2)
 
@@ -123,6 +124,7 @@ def identify_lift_candidates(
                     "confidence_score": score,
                     "estimated_quantity": qty,
                     "total_calculated_weight": round(comb_weight, 2),
+                    "average_grams_per_unit": comb_avg,
                     "stock_available": p_stock,
                     "matched_variants_desc": variant_desc,
                     "variant_ids": [v.id for v in best_combo],
@@ -136,6 +138,7 @@ def identify_lift_candidates(
             est_qty = max(1, min(p_stock, raw_qty))
             tot_w = est_qty * unit_w
             diff = abs(tot_w - lost)
+            avg_w = round(tot_w / est_qty, 2)
 
             if diff <= 0.2:
                 score = 98
@@ -160,8 +163,9 @@ def identify_lift_candidates(
                 "confidence_score": score,
                 "estimated_quantity": est_qty,
                 "total_calculated_weight": round(tot_w, 2),
+                "average_grams_per_unit": avg_w,
                 "stock_available": p_stock,
-                "matched_variants_desc": f"{est_qty} Adet x {unit_w:.2f}g = {tot_w:.2f} gr",
+                "matched_variants_desc": f"{est_qty} Adet Alındı • Ortalama {avg_w:.2f} gr/adet (Toplam {tot_w:.2f} gr)",
                 "variant_ids": [],
                 "has_variants": False
             })
@@ -192,8 +196,9 @@ def identify_lift_candidates(
                 "confidence_score": score,
                 "estimated_quantity": 1,
                 "total_calculated_weight": round(p.weight_grams, 2),
+                "average_grams_per_unit": round(p.weight_grams, 2),
                 "stock_available": 1,
-                "matched_variants_desc": f"1 Adet (Tekil Model: {p.weight_grams:.2f} gr)",
+                "matched_variants_desc": f"1 Adet Alındı • Ortalama {p.weight_grams:.2f} gr/adet (Tekil Model: {p.weight_grams:.2f} gr)",
                 "variant_ids": [],
                 "has_variants": False
             })
