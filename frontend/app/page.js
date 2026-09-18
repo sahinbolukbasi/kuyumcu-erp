@@ -80,9 +80,15 @@ let API_BASE = 'http://127.0.0.1:8000';
 let WS_URL = 'ws://127.0.0.1:8000/ws/live';
 
 if (typeof window !== 'undefined') {
-  API_BASE = `${window.location.protocol}//${window.location.hostname}:8000`;
-  const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  WS_URL = `${wsProto}//${window.location.hostname}:8000/ws/live`;
+  if (window.location.port === '3000') {
+    API_BASE = `${window.location.protocol}//${window.location.hostname}:8000`;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    WS_URL = `${wsProto}//${window.location.hostname}:8000/ws/live`;
+  } else {
+    API_BASE = window.location.origin;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    WS_URL = `${wsProto}//${window.location.host}/ws/live`;
+  }
 } else if (process.env.NEXT_PUBLIC_API_URL) {
   API_BASE = process.env.NEXT_PUBLIC_API_URL;
   WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws/live';
