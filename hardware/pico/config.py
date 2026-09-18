@@ -1,5 +1,5 @@
 # ==============================================================================
-# 💎 Sarraf Erdem IoT ERP - Raspberry Pi Pico Yapılandırma Dosyası
+# 💎 Golden Guard IoT ERP - Raspberry Pi Pico Yapılandırma Dosyası
 # ==============================================================================
 
 # Wi-Fi Ayarları (Pico W için)

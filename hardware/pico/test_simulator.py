@@ -1,5 +1,5 @@
 # ==============================================================================
-# 💎 Sarraf Erdem IoT ERP - Raspberry Pi Pico Kurumsal Simülatör (PC Test Aracı)
+# 💎 Golden Guard IoT ERP - Raspberry Pi Pico Kurumsal Simülatör (PC Test Aracı)
 # ==============================================================================
 # Bu araç, gerçek bir Raspberry Pi Pico W donanımı gibi davranır:
 # 1. Arka planda dahili bir HTTP Web Sunucusu çalıştırır (Port 8080).
@@ -69,12 +69,12 @@ class PicoHttpHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sarraf Erdem IoT Simülatör</title>
+            html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Golden Guard IoT Simülatör</title>
             <style>body{{font-family:sans-serif;background:#0c0e14;color:#fff;padding:24px;max-width:480px;margin:auto;}}
             .card{{background:#151822;border:1px solid #2d3748;padding:16px;border-radius:12px;margin-bottom:12px;}}
             .badge{{background:#22543d;color:#68d391;padding:4px 8px;border-radius:12px;font-size:12px;}}
             </style></head><body>
-            <div class="card"><h2>💎 Sarraf Erdem IoT Simülatörü <span class="badge">● ONLINE</span></h2>
+            <div class="card"><h2>💎 Golden Guard IoT Simülatörü <span class="badge">● ONLINE</span></h2>
             <p>IP: 127.0.0.1:{SIMULATOR_PORT} | Wi-Fi RSSI: {stats['wifi_rssi']} dBm (Mükemmel)</p>
             <p>Uptime: {uptime_str} | Toplam Alarm: {stats['total_alarms']}</p>
             <button style="width:100%;padding:10px;background:#d69e2e;font-weight:bold;border:none;border-radius:8px;cursor:pointer;" onclick="fetch('/api/trigger', {{method:'POST'}}).then(()=>alert('Alarm iletildi!'));">🚨 Web Paneli Alarm Testi</button>

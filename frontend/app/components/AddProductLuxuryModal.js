@@ -48,7 +48,7 @@ export default function AddProductLuxuryModal({
     wire_thickness: '0.28 mm',
     clasp_type: 'Çift Emniyetli Patentli Kilit',
     surface_finish: 'Parlak Cila & Saten',
-    workshop_origin: 'Sarraf Erdem Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli',
+    workshop_origin: 'Golden Guard Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli',
     description: '',
 
     // Fiyat
@@ -100,8 +100,8 @@ export default function AddProductLuxuryModal({
       wire_thickness: '0.28 mm',
       clasp_type: 'Çift Emniyetli Patentli Kilit',
       surface_finish: 'Parlak Cila & Saten',
-      workshop_origin: 'Sarraf Erdem Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli',
-      description: 'Bu eser, Trabzon’un asırlık telkâri ve hasır örme zanaatkârları tarafından 0.28 mikron saf altın tellerin cımbız ve mengene kullanılmaksızın sadece parmak uçlarıyla ilmek ilmek örülmesiyle 42 saatlik saf el emeğiyle tamamlanmıştır. Bileziğin patentli kilit tablasında Sarraf Erdem zanaatkâr mühürü ve T.C. Darphane 916 ayar damgası yer almaktadır.',
+      workshop_origin: 'Golden Guard Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli',
+      description: 'Bu eser, Trabzon’un asırlık telkâri ve hasır örme zanaatkârları tarafından 0.28 mikron saf altın tellerin cımbız ve mengene kullanılmaksızın sadece parmak uçlarıyla ilmek ilmek örülmesiyle 42 saatlik saf el emeğiyle tamamlanmıştır. Bileziğin patentli kilit tablasında Golden Guard zanaatkâr mühürü ve T.C. Darphane 916 ayar damgası yer almaktadır.',
 
       price: '86500',
       labor_cost: '0',
@@ -170,7 +170,7 @@ export default function AddProductLuxuryModal({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold font-display text-white tracking-wide">
-                SARRAF ERDEM — YENİ MÜCEVHER KAYIT & KÜNYE OLUŞTURMA
+                GOLDEN GUARD — YENİ MÜCEVHER KAYIT & KÜNYE OLUŞTURMA
               </h2>
               <p className="text-[11px] font-mono text-amber-300">
                 Sunum vitrini, 4C pırlanta standardı ve IoT tartım yuvası ile tam entegre
@@ -298,7 +298,7 @@ export default function AddProductLuxuryModal({
                 <label className="text-xs font-mono text-slate-300 block mb-1">Zanaatkâr Atölyesi / Menşei</label>
                 <input
                   type="text"
-                  placeholder="Sarraf Erdem Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli"
+                  placeholder="Golden Guard Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli"
                   value={formData.workshop_origin}
                   onChange={e => setFormData({ ...formData, workshop_origin: e.target.value })}
                   className="w-full bg-[#181a26] border border-white/10 text-white rounded-xl p-2.5 text-xs focus:border-amber-400 focus:outline-none"

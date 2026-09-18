@@ -1,4 +1,4 @@
-# 💎 Sarraf Erdem IoT ERP - Raspberry Pi Pico Donanım Modülü
+# 💎 Golden Guard IoT ERP - Raspberry Pi Pico Donanım Modülü
 
 Bu modül, **Raspberry Pi Pico (MicroPython)** ile kuyumculuk ERP sistemimiz arasındaki canlı haberleşmeyi, fiziksel butonla alarm tetiklemeyi ve ağdaki olası kesintileri (paket kaybı, zaman aşımı, gecikme) anlık olarak takip etmeyi sağlar.
 

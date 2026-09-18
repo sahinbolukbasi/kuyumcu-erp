@@ -118,7 +118,7 @@ def get_official_receipt_pusula(
         labor_kdv_amount=labor_kdv,
         total_price=sale.sale_price,
         payment_method=sale.payment_method,
-        seller_name=sale.sold_by_name or "Sarraf Erdem Yetkili",
+        seller_name=sale.sold_by_name or "Golden Guard Yetkili",
         masak_required=is_masak_req,
         masak_declaration=masak_text
     )

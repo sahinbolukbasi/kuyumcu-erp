@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'SARRAF ERDEM - Akıllı Vitrin & Mücevherat ERP',
+  title: 'GOLDEN GUARD - Akıllı Vitrin & Mücevherat ERP',
   description: 'Hassas ağırlık sensörlü vitrin askı takip, hırsızlık alarmı, canlı altın kur ekranı ve kuyumcu ERP sistemi',
 };
 

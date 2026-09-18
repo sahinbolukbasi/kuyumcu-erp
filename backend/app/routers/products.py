@@ -321,12 +321,12 @@ def delete_product_variant(
 # ================= RESMİ MÜCEVHER GARANTİ SERTİFİKASI =================
 @router.get("/{product_id}/certificate", response_model=schemas.JewelryCertificateOut)
 def generate_product_certificate(product_id: int, db: Session = Depends(get_db)):
-    """PRD Modül 7: QR kodlu, Darphane & Sarraf Erdem Garantili Mücevher Sertifikası"""
+    """PRD Modül 7: QR kodlu, Darphane & Golden Guard Garantili Mücevher Sertifikası"""
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Ürün bulunamadı")
 
-    store_name = product.branch.name if product.branch else "Sarraf Erdem Genel Merkez"
+    store_name = product.branch.name if product.branch else "Golden Guard Genel Merkez"
     store_addr = product.branch.address if product.branch else "Kapalıçarşı Kalpakçılar Cad. No:42, Fatih / İstanbul"
     cert_no = product.certificate_no or f"SE-{datetime.datetime.utcnow().year}-{product.id:05d}"
     issue_date = datetime.datetime.utcnow().strftime("%d.%m.%Y %H:%M")
@@ -353,7 +353,7 @@ def generate_product_certificate(product_id: int, db: Session = Depends(get_db))
         stone_shape=product.stone_shape,
         gemstone_type=product.gemstone_type,
         qr_code_data=qr_payload,
-        guarantee_terms="Bu mücevher, Sarraf Erdem Haute Joaillerie kalite ve ayar güvencesi altındadır. Uluslararası Darphane ve Kuyumcular Odası standartlarına uygundur. Ömür boyu ücretsiz bakım, rodaj ve taş tırnak kontrolü dahildir.",
+        guarantee_terms="Bu mücevher, Golden Guard Haute Joaillerie kalite ve ayar güvencesi altındadır. Uluslararası Darphane ve Kuyumcular Odası standartlarına uygundur. Ömür boyu ücretsiz bakım, rodaj ve taş tırnak kontrolü dahildir.",
         approved_by="Baş Usta & Şirket Yetkilisi"
     )
 

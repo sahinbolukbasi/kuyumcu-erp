@@ -101,8 +101,8 @@ export default function Home() {
   // Auth
   const [currentUser, setCurrentUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [loginUsername, setLoginUsername] = useState('admin');
-  const [loginPassword, setLoginPassword] = useState('admin123');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -2119,7 +2119,7 @@ export default function Home() {
                     <Scale className="w-7 h-7" style={{color:'#e5c158'}} />
                   </div>
                   <div>
-                    <h1 style={{background:'linear-gradient(135deg,#FFF6D1 0%,#D4AF37 50%,#AA820A 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',fontFamily:"'Playfair Display',serif",fontSize:'1.5rem',fontWeight:'700',letterSpacing:'0.1em',textTransform:'uppercase'}}>SARRAF ERDEM</h1>
+                    <h1 style={{background:'linear-gradient(135deg,#FFF6D1 0%,#D4AF37 50%,#AA820A 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',fontFamily:"'Playfair Display',serif",fontSize:'1.5rem',fontWeight:'700',letterSpacing:'0.1em',textTransform:'uppercase'}}>GOLDEN GUARD</h1>
                     <p className="text-[10px] font-mono tracking-widest uppercase font-semibold" style={{color:'rgba(212,175,55,0.8)'}}>Haute Joaillerie &amp; Akıllı IoT Vitrin</p>
                   </div>
                 </div>
@@ -2248,24 +2248,6 @@ export default function Home() {
                     </button>
                   </div>
                 </form>
-                <div className="mt-6 pt-5 border-t border-white/5">
-                  <p className="text-[11px] text-center text-slate-400 mb-3">Hızlı Profil Seçimi (Tek Tıkla):</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      {label:'👑 Patron', sub:'Tüm Şirket', user:'admin', pass:'admin123', color:'#d4af37', border:'rgba(212,175,55,0.40)', bg:'rgba(212,175,55,0.08)'},
-                      {label:'🏬 Müdür', sub:'Nişantaşı', user:'selim_mudur', pass:'123456', color:'#60a5fa', border:'rgba(96,165,250,0.40)', bg:'rgba(96,165,250,0.08)'},
-                      {label:'👤 Personel', sub:'Kapalıçarşı', user:'ahmet_kasiyer', pass:'123456', color:'#34d399', border:'rgba(52,211,153,0.40)', bg:'rgba(52,211,153,0.08)'},
-                    ].map((p) => (
-                      <button key={p.user} type="button"
-                        onClick={() => { setLoginUsername(p.user); setLoginPassword(p.pass); }}
-                        className="p-2 rounded-xl text-center transition flex flex-col items-center"
-                        style={{background: loginUsername===p.user ? p.bg : '#12131a', border:`1px solid ${p.border}`}}>
-                        <span className="text-xs font-bold" style={{color:p.color}}>{p.label}</span>
-                        <span className="text-[9px] font-mono mt-0.5" style={{color:`${p.color}cc`}}>{p.sub}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
               <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
                 <div className="flex items-center gap-2">
@@ -2282,7 +2264,7 @@ export default function Home() {
         </main>
         <footer className="relative z-10 w-full border-t border-white/10 px-6 py-3 flex flex-wrap items-center justify-between text-xs text-slate-400" style={{background:'rgba(12,13,18,0.60)'}}>
           <div className="flex items-center gap-3">
-            <span className="text-slate-300">© 2025 SARRAF ERDEM MÜCEVHERAT A.Ş.</span>
+            <span className="text-slate-300">© 2025 GOLDEN GUARD MÜCEVHERAT A.Ş.</span>
             <span className="hidden md:inline text-slate-600">•</span>
             <span className="hidden md:inline">Akıllı IoT Vitrin &amp; Mücevher Telemetri Otomasyonu</span>
           </div>
@@ -2321,7 +2303,7 @@ export default function Home() {
               </div>
               <div className="flex flex-col">
                 <span className="font-cinzel text-base font-bold tracking-wider gold-gradient-text uppercase leading-tight">
-                  SARRAF ERDEM
+                  GOLDEN GUARD
                 </span>
                 <span className="text-[10px] tracking-widest text-slate-400 uppercase font-semibold mt-0.5">
                   Haute Joaillerie &amp; IoT
@@ -2727,7 +2709,7 @@ export default function Home() {
             </button>
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-widest text-amber-400 font-bold">
-                SARRAF ERDEM VİTRİN ERP
+                GOLDEN GUARD VİTRİN ERP
               </span>
               <h1 className="text-base lg:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 {activeTab === 'vitrin' && 'Canlı Vitrin & Askı Güvenliği'}
@@ -3775,7 +3757,7 @@ export default function Home() {
                 <div className="flex items-center gap-3">
                   <img src={LOGO_URL} alt="Logo" className="w-12 h-12 object-contain" />
                   <div>
-                    <h1 className="font-cinzel text-xl font-bold tracking-wider gold-gradient-text">SARRAF ERDEM MÜCEVHERAT</h1>
+                    <h1 className="font-cinzel text-xl font-bold tracking-wider gold-gradient-text">GOLDEN GUARD MÜCEVHERAT</h1>
                     <p className="text-xs text-slate-400">Kapalıçarşı No: 42 Fatih / İstanbul • Tel: (0212) 522 00 00</p>
                   </div>
                 </div>
@@ -4265,7 +4247,7 @@ export default function Home() {
                 </div>
                 <div>
                   <h2 className="font-cinzel text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                    SARRAF ERDEM — MÜCEVHER VİTRİNİ & SUNUM PORTALI
+                    GOLDEN GUARD — MÜCEVHER VİTRİNİ & SUNUM PORTALI
                   </h2>
                   <p className="text-xs text-slate-400 font-mono">
                     Canlı borsa hesaplamalı zanaatkâr sunumu ve 4C pırlanta koleksiyon yönetimi
@@ -6225,7 +6207,7 @@ export default function Home() {
 
             <div className="p-4 bg-[#08090d] rounded-xl border border-amber-500/30 space-y-3 text-xs">
               <div className="flex items-center justify-between border-b pb-2 border-[#242938]">
-                <span className="font-cinzel text-amber-400 font-bold">SARRAF ERDEM GARANTİ BELGESİ</span>
+                <span className="font-cinzel text-amber-400 font-bold">GOLDEN GUARD GARANTİ BELGESİ</span>
                 <span className="font-mono text-slate-400">{selectedSaleForEmail.invoice_no || `SE-${selectedSaleForEmail.id}`}</span>
               </div>
               <p className="text-slate-300">
@@ -6478,7 +6460,7 @@ export default function Home() {
       )}
 
       {/* Yeni Ürün Modalı */}
-      {/* Sarraf Erdem Haute Joaillerie Lüks Mücevher Ekleme Modalı */}
+      {/* Golden Guard Haute Joaillerie Lüks Mücevher Ekleme Modalı */}
       <AddProductLuxuryModal
         isOpen={showAddProductModal}
         onClose={() => setShowAddProductModal(false)}
@@ -7108,7 +7090,7 @@ export default function Home() {
             <div id="printable-pusula" className="p-5 bg-[#0f121a] rounded-xl border border-amber-500/30 font-mono text-xs space-y-4">
               <div className="flex justify-between items-start border-b border-dashed border-amber-500/40 pb-3">
                 <div>
-                  <div className="font-cinzel font-bold text-base text-amber-400 tracking-wider">SARRAF ERDEM KUYUMCULUK</div>
+                  <div className="font-cinzel font-bold text-base text-amber-400 tracking-wider">GOLDEN GUARD KUYUMCULUK</div>
                   <div className="text-[10px] text-slate-400">Kapalıçarşı Kalpakçılar Cad. No: 42 Fatih / İSTANBUL</div>
                   <div className="text-[10px] text-slate-400">Vergi Dairesi: Beyazıt | VKN: 7480192841 | Mersis: 0748019284100001</div>
                   <div className="text-[10px] text-emerald-400 mt-0.5">Darphane ve Damga Matbaası Yetki No: TR-34-IST-8849</div>
@@ -7664,7 +7646,7 @@ export default function Home() {
                 T.C. KUYUMCULUK & DARPHANE STANDARTLARINDA
               </span>
               <h2 className="font-cinzel text-xl lg:text-2xl font-bold text-amber-300 tracking-wider mt-1">
-                SARRAF ERDEM
+                GOLDEN GUARD
               </h2>
               <p className="text-xs text-slate-300 tracking-widest font-serif italic mt-0.5">
                 Resmi Mücevher & Altın Orijinallik Garanti Sertifikası
@@ -7722,7 +7704,7 @@ export default function Home() {
                 <div className="font-mono text-slate-300 font-bold">{new Date(certificateModalData.issue_date).toLocaleString('tr-TR')}</div>
               </div>
               <div className="text-right">
-                <div className="text-amber-400 font-bold">SARRAF ERDEM GÜVENCESİ</div>
+                <div className="text-amber-400 font-bold">GOLDEN GUARD GÜVENCESİ</div>
                 <div className="text-slate-500 italic">Mühür & Dijital İmza</div>
               </div>
             </div>

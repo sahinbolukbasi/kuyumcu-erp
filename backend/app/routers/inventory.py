@@ -104,7 +104,7 @@ def get_critical_stock_and_supplier_draft(
         group_counts[key] = group_counts.get(key, 0) + 1
 
     critical_items = []
-    whatsapp_lines = ["📢 *SARRAF ERDEM - TOPTAN / ATÖLYE SİPARİŞ LİSTESİ*", "Tarih: " + datetime.datetime.now().strftime("%d.%m.%Y %H:%M"), "---"]
+    whatsapp_lines = ["📢 *GOLDEN GUARD - TOPTAN / ATÖLYE SİPARİŞ LİSTESİ*", "Tarih: " + datetime.datetime.now().strftime("%d.%m.%Y %H:%M"), "---"]
 
     for p in active_products:
         key = (p.category, p.name, p.purity)

@@ -66,8 +66,8 @@ export default function ProductPresentationShowcase({
     gold_color: 'Sarı Altın',
     craftsmanship_type: 'Trabzon Hasırı (El Örgüsü)',
     surface_finish: 'Parlak Cila & Saten',
-    workshop_origin: 'Sarraf Erdem Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli',
-    description: 'Bu eser, Trabzon’un asırlık telkâri ve hasır örme zanaatkârları tarafından 0.28 mikron saf altın tellerin cımbız ve mengene kullanılmaksızın sadece parmak uçlarıyla ilmek ilmek örülmesiyle 42 saatlik saf el emeğiyle tamamlanmıştır. Bileziğin patentli kilit tablasında Sarraf Erdem zanaatkâr mühürü ve T.C. Darphane 916 ayar damgası yer almaktadır.',
+    workshop_origin: 'Golden Guard Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli',
+    description: 'Bu eser, Trabzon’un asırlık telkâri ve hasır örme zanaatkârları tarafından 0.28 mikron saf altın tellerin cımbız ve mengene kullanılmaksızın sadece parmak uçlarıyla ilmek ilmek örülmesiyle 42 saatlik saf el emeğiyle tamamlanmıştır. Bileziğin patentli kilit tablasında Golden Guard zanaatkâr mühürü ve T.C. Darphane 916 ayar damgası yer almaktadır.',
     image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB16_iwXd6omm192OHmXn8HAcpmTfpReAh_T4gybuJLBho44zIWo9hDj96syd13by1giNIoAjrKiprHHEgIQlPoNDztoLKFvvBzvzMp_2mNcm1sU6MX1prmlDys3KNyG7pGq4hJacOomz0Xc4LVVHkcvKX9p1TA0wWE9cPakszcS5xUD50NDFyrujKYZ2qYzSJcWFQgDowTHyOhDVzczC5xEAQgUOhUG0-t0_76Zota1eYdqnvHp3Scyg',
     slot_id: 1
   };
@@ -171,7 +171,7 @@ export default function ProductPresentationShowcase({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>SARRAF ERDEM - Müşteri Teklif & Sertifika Fişi</title>
+          <title>GOLDEN GUARD - Müşteri Teklif & Sertifika Fişi</title>
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #111; max-width: 800px; margin: 0 auto; }
             .header { border-bottom: 2px solid #d4af37; padding-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -191,7 +191,7 @@ export default function ProductPresentationShowcase({
         <body>
           <div class="header">
             <div>
-              <div class="logo">SARRAF ERDEM</div>
+              <div class="logo">GOLDEN GUARD</div>
               <div class="sub">Haute Joaillerie & Akıllı IoT Vitrin — Kapalıçarşı</div>
             </div>
             <div style="text-align: right;">
@@ -237,12 +237,12 @@ export default function ProductPresentationShowcase({
           </div>
 
           <div style="margin-top: 20px; font-size: 12px; line-height: 1.6; background: #fffbeb; border: 1px solid #fef3c7; padding: 15px; border-radius: 6px;">
-            <strong>Zanaatkâr Notu:</strong> ${p.description || 'Sarraf Erdem özel koleksiyon parçası.'}
+            <strong>Zanaatkâr Notu:</strong> ${p.description || 'Golden Guard özel koleksiyon parçası.'}
           </div>
 
           <div class="footer">
-            Bu belge Sarraf Erdem Mücevherat A.Ş. akıllı IoT vitrin otomasyon sistemi tarafından üretilmiştir.<br/>
-            Danışman: ${currentUser?.full_name || 'Sarraf Erdem Satış Masası'} &nbsp;|&nbsp; BIST Takas Kodu: 9481-TR
+            Bu belge Golden Guard Mücevherat A.Ş. akıllı IoT vitrin otomasyon sistemi tarafından üretilmiştir.<br/>
+            Danışman: ${currentUser?.full_name || 'Golden Guard Satış Masası'} &nbsp;|&nbsp; BIST Takas Kodu: 9481-TR
           </div>
           <script>window.onload = function() { window.print(); }</script>
         </body>
@@ -254,7 +254,7 @@ export default function ProductPresentationShowcase({
   // WhatsApp Teklifi
   const handleShareWhatsapp = () => {
     const text = encodeURIComponent(
-      `💎 *SARRAF ERDEM HAUTE JOAILLERIE*\n` +
+      `💎 *GOLDEN GUARD HAUTE JOAILLERIE*\n` +
       `Sayın Müşterimiz, incelediğiniz özel parça detayları:\n\n` +
       `✨ *Ürün:* ${p.name}\n` +
       `🔖 *Barkod:* ${p.barcode}\n` +
@@ -401,7 +401,7 @@ export default function ProductPresentationShowcase({
             </h1>
 
             <p className="text-xs text-slate-400 font-mono">
-              {p.workshop_origin || 'Sarraf Erdem Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli · Koleksiyon No 2025/12'}
+              {p.workshop_origin || 'Golden Guard Özel Zanaatkâr Atölyesi No:04 · Kapalıçarşı Darphane Tescilli · Koleksiyon No 2025/12'}
             </p>
           </div>
 
@@ -542,7 +542,7 @@ export default function ProductPresentationShowcase({
               </div>
 
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">
-                {p.description || "Bu eser, Trabzon’un asırlık telkâri ve hasır örme zanaatkârları tarafından 0.28 mikron saf altın tellerin cımbız ve mengene kullanılmaksızın sadece parmak uçlarıyla ilmek ilmek örülmesiyle 42 saatlik saf el emeğiyle tamamlanmıştır. Bileziğin patentli kilit tablasında Sarraf Erdem zanaatkâr mühürü ve T.C. Darphane 916 ayar damgası yer almaktadır."}
+                {p.description || "Bu eser, Trabzon’un asırlık telkâri ve hasır örme zanaatkârları tarafından 0.28 mikron saf altın tellerin cımbız ve mengene kullanılmaksızın sadece parmak uçlarıyla ilmek ilmek örülmesiyle 42 saatlik saf el emeğiyle tamamlanmıştır. Bileziğin patentli kilit tablasında Golden Guard zanaatkâr mühürü ve T.C. Darphane 916 ayar damgası yer almaktadır."}
               </p>
 
               <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/10">

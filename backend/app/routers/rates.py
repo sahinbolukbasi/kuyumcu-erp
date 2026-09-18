@@ -1,5 +1,5 @@
 # ==============================================================================
-# 💎 Sarraf Erdem IoT ERP - Canlı Altın ve Döviz Kurları Router'ı
+# 💎 Golden Guard IoT ERP - Canlı Altın ve Döviz Kurları Router'ı
 # ==============================================================================
 
 from fastapi import APIRouter, Query

@@ -132,7 +132,7 @@ def send_certificate_email(
     # E-Posta Gönderim Logu & Audit
     email_content = {
         "to": recipient,
-        "subject": f"SARRAF ERDEM - Mücevherat Sertifikası & E-Fatura Fişi (#{inv_no})",
+        "subject": f"GOLDEN GUARD - Mücevherat Sertifikası & E-Fatura Fişi (#{inv_no})",
         "customer_name": sale.customer_name,
         "product_name": sale.product_name,
         "purity": sale.purity,

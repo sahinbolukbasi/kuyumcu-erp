@@ -324,7 +324,7 @@ def seed_initial_data():
                     description="Klasik 6 tırnaklı, ışığı kusursuz kıran solitaire tektaş pırlanta evlilik teklifi yüzüğü.",
                     craftsmanship_type="Klasik Solitaire Döküm & Mıhlama",
                     surface_finish="Ayna Parlak",
-                    workshop_origin="Sarraf Erdem Özel Koleksiyon",
+                    workshop_origin="Golden Guard Özel Koleksiyon",
                     has_stones=True,
                     gemstone_type="Pırlanta",
                     diamond_carat=0.30,
@@ -593,7 +593,7 @@ async def lifespan(app: FastAPI):
     watchdog_task.cancel()
 
 app = FastAPI(
-    title="Sarraf Erdem ERP & IoT Vitrin Güvenlik Sistemi",
+    title="Golden Guard ERP & IoT Vitrin Güvenlik Sistemi",
     version="1.4.0",
     lifespan=lifespan
 )
@@ -628,7 +628,7 @@ app.include_router(rates.router)
 def health_check():
     return {
         "status": "healthy",
-        "service": "Sarraf Erdem IoT ERP API",
+        "service": "Golden Guard IoT ERP API",
         "version": "1.4.0"
     }
 

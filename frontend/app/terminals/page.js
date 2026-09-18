@@ -261,7 +261,7 @@ export default function TerminalsPage() {
         </div>
       </div>
 
-      {/* ================= 2. ANA LÜKS HEADER (SARRAF ERDEM & EKRAN DEĞİŞTİRİCİ) ================= */}
+      {/* ================= 2. ANA LÜKS HEADER (GOLDEN GUARD & EKRAN DEĞİŞTİRİCİ) ================= */}
       <header className="bg-[#0e1017]/95 backdrop-blur-xl border-b border-amber-500/20 px-4 sm:px-6 py-2.5 sticky top-0 z-40">
         <div className="max-w-[1700px] mx-auto flex items-center justify-between gap-4">
           
@@ -275,7 +275,7 @@ export default function TerminalsPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-cinzel text-base sm:text-lg font-bold tracking-wider gold-gradient-text">
-                    SARRAF ERDEM
+                    GOLDEN GUARD
                   </span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-mono font-semibold">
                     V3.4 IoT
@@ -747,7 +747,7 @@ export default function TerminalsPage() {
             <div className="flex items-center gap-4">
               <div className="w-5 h-5 rounded-full bg-amber-400 shadow-[0_0_15px_#facc15]"></div>
               <div>
-                <h1 className="text-3xl font-bold tracking-wider font-cinzel gold-gradient-text">SARRAF ERDEM 1978</h1>
+                <h1 className="text-3xl font-bold tracking-wider font-cinzel gold-gradient-text">GOLDEN GUARD 1978</h1>
                 <p className="text-xs text-slate-400 tracking-widest font-mono uppercase mt-0.5">Merkez Mağaza Canlı Vitrin &amp; Kasa Ekranı</p>
               </div>
             </div>

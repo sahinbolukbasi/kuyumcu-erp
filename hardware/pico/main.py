@@ -1,5 +1,5 @@
 # ==============================================================================
-# 💎 Sarraf Erdem IoT ERP - Kurumsal Raspberry Pi Pico W Donanım Firmware (v2.1)
+# 💎 Golden Guard IoT ERP - Kurumsal Raspberry Pi Pico W Donanım Firmware (v2.1)
 # ==============================================================================
 # Özellikler:
 # 1. Çift Yönlü İletişim: ERP'ye Alarm & Heartbeat gönderir, ERP'den gelen IP isteklerini dinler.
@@ -91,7 +91,7 @@ def connect_wifi():
                 stats["wifi_rssi"] = -55
 
             print("=" * 65)
-            print("💎 SARRAF ERDEM IOT CİHAZI ÇEVRİMİÇİ!")
+            print("💎 GOLDEN GUARD IOT CİHAZI ÇEVRİMİÇİ!")
             print(f"📌 Firmware Sürümü : {FIRMWARE_VERSION}")
             print(f"📌 Cihaz IP Adresi : http://{stats['device_ip']}")
             print(f"📌 Sinyal Gücü     : {stats['wifi_rssi']} dBm")
@@ -209,7 +209,7 @@ def generate_web_portal_html():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sarraf Erdem - IoT Cihaz Paneli</title>
+    <title>Golden Guard - IoT Cihaz Paneli</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0c0e14; color: #e2e8f0; margin: 0; padding: 20px; }}
         .container {{ max-width: 540px; margin: 0 auto; background: #151822; border: 1px solid #2d3748; border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }}
@@ -229,7 +229,7 @@ def generate_web_portal_html():
     <div class="container">
         <div class="header">
             <div>
-                <div class="title">💎 SARRAF ERDEM IoT</div>
+                <div class="title">💎 GOLDEN GUARD IoT</div>
                 <div style="font-size: 11px; color: #a0aec0;">Akıllı Vitrin & Terazi Donanımı ({config.DEVICE_ID})</div>
             </div>
             <span class="badge">● ÇEVRİMİÇİ</span>
@@ -380,7 +380,7 @@ def init_web_server(port=80):
 
 def main():
     print("=" * 65)
-    print("💎 Sarraf Erdem - Raspberry Pi Pico Kurumsal IoT Firmware")
+    print("💎 Golden Guard - Raspberry Pi Pico Kurumsal IoT Firmware")
     print(f"📌 Buton Pini        : GP{config.BUTTON_PIN} (GND Tetikleme)")
     print(f"📌 Heartbeat Sıklığı : {config.HEARTBEAT_INTERVAL_SEC} sn")
     print("=" * 65)

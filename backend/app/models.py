@@ -99,7 +99,7 @@ class Product(Base):
     diamond_clarity = Column(String(10), nullable=True) # FL, IF, VVS1, VVS2, VS1, VS2, SI1, SI2
     diamond_cut = Column(String(20), nullable=True) # Excellent, Very Good, Good, Fair
     stone_shape = Column(String(30), nullable=True) # Yuvarlak (Brillant), Baget, Prenses, Zümrüt, Damla, Oval
-    stone_certificate = Column(String(50), nullable=True) # GIA, HRD, IGI, Sarraf Erdem Garanti Belgesi
+    stone_certificate = Column(String(50), nullable=True) # GIA, HRD, IGI, Golden Guard Garanti Belgesi
     certificate_no = Column(String(50), nullable=True) # Sertifika No (örn: GIA-21940182)
 
     # Medya & Bakım
