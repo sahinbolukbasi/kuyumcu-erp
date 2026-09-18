@@ -69,7 +69,8 @@ import {
   QrCode,
   ShoppingCart,
   Menu,
-  X
+  X,
+  MapPin
 } from 'lucide-react';
 
 import ProductPresentationShowcase from './components/ProductPresentationShowcase';
@@ -169,7 +170,28 @@ export default function Home() {
   const [showAddSlotModal, setShowAddSlotModal] = useState(false);
   const [showEditDeviceModal, setShowEditDeviceModal] = useState(false);
   const [selectedSlotForEdit, setSelectedSlotForEdit] = useState(null);
+  const [editDeviceFormData, setEditDeviceFormData] = useState({
+    label: '',
+    slot_type: 'Askı',
+    group_name: 'Ana Vitrin',
+    device_id: '',
+    ip_address: '',
+    port: 80,
+    tolerance_grams: 0.20,
+    is_active: true
+  });
+  const [assignSelectedProductId, setAssignSelectedProductId] = useState('');
+  const [takeCustodyModal, setTakeCustodyModal] = useState(null); // { productId, slotId, product, maxQty, selectedQty }
+  const [liveRates, setLiveRates] = useState(null);
+  const [ratesLoading, setRatesLoading] = useState(false);
   
+  // IoT Cihaz Teşhis (Canlı IP Ping) Modalı State'leri
+  const [showDeviceDiagModal, setShowDeviceDiagModal] = useState(false);
+  const [deviceDiagLoading, setDeviceDiagLoading] = useState(false);
+  const [deviceDiagResult, setDeviceDiagResult] = useState(null);
+  const [selectedSlotForDiag, setSelectedSlotForDiag] = useState(null);
+  const [deviceAlertToast, setDeviceAlertToast] = useState(null); // { type: 'error'|'success', title, message, time }
+
   // CRM & E-Posta Modalları
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [selectedCustomerHistory, setSelectedCustomerHistory] = useState(null);
@@ -1086,6 +1108,13 @@ export default function Home() {
     fetchBranchOverview();
     fetchReservations();
     fetchBranchLocations();
+    fetchLiveRates();
+
+    const ratesInterval = setInterval(() => {
+      fetchLiveRates();
+    }, 30000);
+
+    return () => clearInterval(ratesInterval);
   }, [selectedGroupFilter, selectedTypeFilter]);
 
   // Auth Yüklemesi
@@ -1161,6 +1190,28 @@ export default function Home() {
               fetchSlots();
               fetchSystemLogs();
             }
+            if (data.type === 'DEVICE_OFFLINE') {
+              playAlertSound();
+              fetchSlots();
+              fetchAlerts();
+              fetchSystemLogs();
+              setDeviceAlertToast({
+                type: 'error',
+                title: '🚨 IOT DONANIM BAĞLANTISI KOPTU!',
+                message: data.message || `#${data.slot_number} numaralı IoT cihazının bağlantısı kesildi!`,
+                time: new Date().toLocaleTimeString('tr-TR')
+              });
+            }
+            if (data.type === 'DEVICE_ONLINE') {
+              fetchSlots();
+              fetchSystemLogs();
+              setDeviceAlertToast({
+                type: 'success',
+                title: '🟢 IOT CİHAZI YENİDEN BAĞLANDI',
+                message: data.message || `#${data.slot_number} numaralı IoT cihazı çevrimiçi oldu.`,
+                time: new Date().toLocaleTimeString('tr-TR')
+              });
+            }
           } catch (err) {
             console.error("WS Message Error", err);
           }
@@ -1188,25 +1239,92 @@ export default function Home() {
     }
   };
 
-  // Ürünü Personelin Zimmetine Alma
-  const handleTakeIntoCustody = async (productId, slotId) => {
+  // Canlı Altın ve Döviz Kurlarını Çek
+  const fetchLiveRates = async (force = false) => {
+    try {
+      setRatesLoading(true);
+      const res = await fetch(`${API_BASE}/api/v1/rates/live${force ? '?refresh=true' : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLiveRates(data);
+        if (data?.rates?.HAS_ALTIN?.sell) {
+          setGoldPrice(Number(data.rates.HAS_ALTIN.sell));
+        }
+      }
+    } catch (e) {
+      console.error("Live rates fetch error:", e);
+    } finally {
+      setRatesLoading(false);
+    }
+  };
+
+  // Canlı Altın Kuru Bazlı Gerçek Satış Fiyatı Hesaplama
+  const getProductLivePrice = (p) => {
+    if (!p) return 0;
+    const hasAltinRate = Number(liveRates?.rates?.HAS_ALTIN?.sell) || goldPrice || 6825;
+    let gramRate = hasAltinRate;
+    if (p.purity === '22K' && liveRates?.rates?.ALTIN_22K?.sell) {
+      gramRate = Number(liveRates.rates.ALTIN_22K.sell);
+    } else if (p.purity === '18K' && liveRates?.rates?.ALTIN_18K?.sell) {
+      gramRate = Number(liveRates.rates.ALTIN_18K.sell);
+    } else if (p.purity === '14K' && liveRates?.rates?.ALTIN_14K?.sell) {
+      gramRate = Number(liveRates.rates.ALTIN_14K.sell);
+    } else if (p.milyem) {
+      gramRate = hasAltinRate * (p.milyem / 1000);
+    }
+    const goldValue = (p.weight_grams || 0) * gramRate;
+    const labor = p.labor_cost || 0;
+    return Math.round(goldValue + labor);
+  };
+
+  // Ürünü Personelin Zimmetine Alma Talebi (Adet Kontrollü)
+  const handleTakeIntoCustody = (productId, slotId) => {
+    const prod = products.find(p => p.id === productId);
+    const qty = prod?.stock_quantity || 1;
+
+    // Kullanıcı Kuralı: "ürünü adet yoksa yani 1 ise sorma bunu direkt alsın"
+    if (qty <= 1) {
+      executeTakeIntoCustody(productId, slotId, 1);
+    } else {
+      // 1'den fazla ise sor
+      setTakeCustodyModal({
+        productId,
+        slotId,
+        product: prod,
+        maxQty: qty,
+        selectedQty: 1
+      });
+    }
+  };
+
+  // Zimmete Alma İsteğini Backend'e Gönder (Adet, Gramaj ve Varyant Korumalı)
+  const executeTakeIntoCustody = async (productId, slotId, quantity = 1, actualGrams = null, variantIds = null) => {
     if (!token) return;
     try {
+      const payload = {
+        product_id: productId,
+        slot_id: slotId,
+        quantity: parseInt(quantity || 1)
+      };
+      if (actualGrams && actualGrams > 0) payload.actual_grams = parseFloat(actualGrams);
+      if (variantIds && variantIds.length > 0) payload.variant_ids = variantIds;
+
       const res = await fetch(`${API_BASE}/api/v1/iot/custody/take`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ product_id: productId, slot_id: slotId })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
-        const data = await res.json();
         setLiftMatchWizard(null);
+        setTakeCustodyModal(null);
         fetchMyCustody();
         fetchSlots();
         fetchAlerts();
         fetchSystemLogs();
+        fetchProducts();
 
         // Eğer aktif müşteri seansı yoksa otomatik seans başlat
         if (!activeServiceSession) {
@@ -1219,6 +1337,17 @@ export default function Home() {
     } catch (e) {
       alert("Hata: " + e.message);
     }
+  };
+
+  // Akıllı Adayı Tek Tıkla Zimmete Al (Kalabalık Gün Hızlı İşlem)
+  const handleTakeCandidateIntoCustody = (candidate, slotId) => {
+    executeTakeIntoCustody(
+      candidate.product_id,
+      slotId,
+      candidate.estimated_quantity || 1,
+      candidate.total_calculated_weight || candidate.weight_grams,
+      candidate.variant_ids || []
+    );
   };
 
   // Ürünü Vitrine Geri Koyma
@@ -1680,6 +1809,171 @@ export default function Home() {
         fetchSystemLogs();
       }
     } catch (e) { alert("Hata: " + e.message); }
+  };
+
+  // IoT Cihazı Düzenleme Penceresini Aç
+  const handleOpenEditDevice = (slot) => {
+    setSelectedSlotForEdit(slot);
+    setEditDeviceFormData({
+      label: slot.label || '',
+      slot_type: slot.slot_type || 'Askı',
+      group_name: slot.group_name || 'Ana Vitrin',
+      device_id: slot.device_id || `DEVICE_${slot.slot_number}`,
+      ip_address: slot.ip_address || '',
+      port: slot.port || 80,
+      tolerance_grams: slot.tolerance_grams || 0.20,
+      is_active: slot.is_active !== false
+    });
+    setAssignSelectedProductId('');
+    setShowEditDeviceModal(true);
+  };
+
+  // IoT Cihazı Yapılandırmasını Kaydet
+  const handleUpdateSlotConfig = async (e) => {
+    if (e) e.preventDefault();
+    if (!token || !selectedSlotForEdit) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/iot/slots/${selectedSlotForEdit.id}/device-config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          label: editDeviceFormData.label,
+          slot_type: editDeviceFormData.slot_type,
+          group_name: editDeviceFormData.group_name,
+          device_id: editDeviceFormData.device_id,
+          ip_address: editDeviceFormData.ip_address,
+          port: parseInt(editDeviceFormData.port || 80),
+          tolerance_grams: parseFloat(editDeviceFormData.tolerance_grams || 0.20),
+          is_active: editDeviceFormData.is_active
+        })
+      });
+      if (res.ok) {
+        setShowEditDeviceModal(false);
+        fetchSlots();
+        fetchSlotGroups();
+        fetchSystemLogs();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Güncelleme başarısız.");
+      }
+    } catch (err) {
+      alert("Hata: " + err.message);
+    }
+  };
+
+  // IoT Cihazı Aktif / Devre Dışı (Pasif) Bırakma
+  const handleToggleSlotActive = async (slotId) => {
+    if (!token || currentUser?.role !== 'ADMIN') return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/iot/slots/${slotId}/toggle-active`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        fetchSlots();
+        fetchSystemLogs();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "İşlem gerçekleştirilemedi.");
+      }
+    } catch (err) {
+      alert("Hata: " + err.message);
+    }
+  };
+
+  // IoT Cihazı Sistemden Kaldır (Sil)
+  const handleDeleteSlot = async (slotId, slotNumber) => {
+    if (!token || currentUser?.role !== 'ADMIN') return;
+    const ok = window.confirm(`DİKKAT: #${slotNumber} numaralı IoT cihazını sistemden kaldırmak istediğinize emin misiniz? Varsa üzerindeki modeller kasaya aktarılacaktır.`);
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/iot/slots/${slotId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        setShowEditDeviceModal(false);
+        setSelectedSlotForEdit(null);
+        fetchSlots();
+        fetchProducts();
+        fetchSystemLogs();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Cihaz silinemedi.");
+      }
+    } catch (err) {
+      alert("Hata: " + err.message);
+    }
+  };
+
+  // IoT Cihazı Canlı IP Ping & Sağlık Teşhisi
+  const handlePingDevice = async (slot) => {
+    if (!token || currentUser?.role !== 'ADMIN') return;
+    setSelectedSlotForDiag(slot);
+    setDeviceDiagResult(null);
+    setDeviceDiagLoading(true);
+    setShowDeviceDiagModal(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/iot/slots/${slot.id}/ping-device`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      setDeviceDiagResult(data);
+      fetchSlots();
+    } catch (err) {
+      setDeviceDiagResult({
+        status: 'error',
+        reachable: false,
+        message: err.message || 'Cihaza ulaşılamadı (Network hatası)'
+      });
+    } finally {
+      setDeviceDiagLoading(false);
+    }
+  };
+
+  // Ürün ile IoT Cihazı Eşleştir / Askıya Ekle veya Kaldır
+  const handleAssignProduct = async (slotId, productId, action = 'ADD') => {
+    if (!token || currentUser?.role !== 'ADMIN') return;
+    if (!productId) {
+      alert("Lütfen eşleştirilecek bir ürün seçin.");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/iot/slots/${slotId}/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          product_id: parseInt(productId),
+          action: action
+        })
+      });
+      if (res.ok) {
+        fetchSlots();
+        fetchProducts();
+        fetchAnalytics();
+        fetchSystemLogs();
+        setAssignSelectedProductId('');
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Eşleştirme işlemi başarısız.");
+      }
+    } catch (err) {
+      alert("Hata: " + err.message);
+    }
   };
 
   // Simülatör (Delta gramaj destekli)
@@ -2392,19 +2686,22 @@ export default function Home() {
           <div className="overflow-hidden whitespace-nowrap w-full">
             <div className="inline-flex gap-8 animate-marquee pl-4 text-slate-300">
               <span className="inline-flex items-center gap-1">
-                🪙 <b>Has Altın:</b> <span className="font-semibold text-white">₺3.746,50</span> <span className="text-slate-400">/</span> <span className="font-semibold text-amber-400">₺3.788,20</span> <span className="text-emerald-400 text-[10px]">%+0.42 ▲</span>
+                🪙 <b>Has Altın:</b> <span className="font-semibold text-white">{Number(liveRates?.rates?.HAS_ALTIN?.buy || 6818.14).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span> <span className="text-slate-400">/</span> <span className="font-semibold text-amber-400">{Number(liveRates?.rates?.HAS_ALTIN?.sell || 6819.16).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span> <span className="text-emerald-400 text-[10px] font-mono">{liveRates?.rates?.HAS_ALTIN?.change || '+%0.75'} ▲</span>
               </span>
               <span className="inline-flex items-center gap-1">
-                🪙 <b>22 Ayar:</b> <span className="font-semibold text-white">₺3.432,00</span> <span className="text-slate-400">/</span> <span className="font-semibold text-amber-400">₺3.564,80</span> <span className="text-emerald-400 text-[10px]">%+0.28 ▲</span>
+                🪙 <b>22 Ayar:</b> <span className="font-semibold text-white">{Number(liveRates?.rates?.ALTIN_22K?.buy || 6205.25).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span> <span className="text-slate-400">/</span> <span className="font-semibold text-amber-400">{Number(liveRates?.rates?.ALTIN_22K?.sell || 6210.98).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span> <span className="text-amber-300 text-[10px] font-mono">{liveRates?.rates?.ALTIN_22K?.change || '-%0.13'}</span>
               </span>
               <span className="inline-flex items-center gap-1">
-                🪙 <b>Çeyrek:</b> <span className="font-semibold text-white">₺6.095,00</span> <span className="text-slate-400">/</span> <span className="font-semibold text-amber-400">₺6.195,00</span> <span className="text-emerald-400 text-[10px]">%+0.35 ▲</span>
+                🪙 <b>Çeyrek:</b> <span className="font-semibold text-white">{Number(liveRates?.rates?.CEYREK?.buy || 10886.40).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span> <span className="text-slate-400">/</span> <span className="font-semibold text-amber-400">{Number(liveRates?.rates?.CEYREK?.sell || 11134.82).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
               </span>
               <span className="inline-flex items-center gap-1">
-                🌎 <b>ONS Altın:</b> <span className="font-semibold text-amber-400">$3.044,20</span> <span className="text-rose-400 text-[10px]">%-0.12 ▼</span>
+                🌎 <b>ONS:</b> <span className="font-semibold text-amber-400">${Number(liveRates?.rates?.ONS?.sell || 4347.20).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span> <span className="text-emerald-400 text-[10px] font-mono">{liveRates?.rates?.ONS?.change || '+%0.45'} ▲</span>
               </span>
               <span className="inline-flex items-center gap-1">
-                💵 <b>USD/TRY:</b> <span className="font-semibold text-white">34,85 ₺</span> <span className="text-emerald-400 text-[10px]">%+0.15 ▲</span>
+                💵 <b>USD/TRY:</b> <span className="font-semibold text-white">{Number(liveRates?.rates?.USD?.sell || 48.79).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                💶 <b>EUR/TRY:</b> <span className="font-semibold text-white">{Number(liveRates?.rates?.EUR?.sell || 55.97).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
               </span>
             </div>
           </div>
@@ -3324,7 +3621,7 @@ export default function Home() {
                   return true;
                 })
                 .map(product => {
-                  const calculatedPrice = (product.weight_grams * (marketData?.altin_gram || 3100)) + (product.labor_cost || 0);
+                  const calculatedPrice = getProductLivePrice(product);
                   const locationTag = product.location_label || 
                     (product.slot_id ? `${product.branch_name || 'Şube'} – Tabla #${Math.ceil(product.slot_id / 4)} – Askı #${product.slot_id}` : `${product.branch_name || 'Şube'} – 🔐 Ana Çelik Kasa`);
 
@@ -3850,50 +4147,103 @@ export default function Home() {
           </div>
         )}
 
-        {/* ================= SEKME 9: TV EKRANI ================= */}
+        {/* ================= SEKME 9: TV EKRANI (CANLI ALTIN & DÖVİZ KURLARI) ================= */}
         {activeTab === 'tv_board' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between bg-[#12141c] p-4 rounded-xl border border-amber-500/40">
-              <div className="flex items-center gap-3">
-                <Tv className="w-6 h-6 text-amber-400" />
-                <h2 className="font-cinzel text-lg font-bold text-white">4K VİTRİN & TV CANLI KUR TAKİP EKRANI</h2>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#12141c] p-4 rounded-xl border border-amber-500/40">
+              <div>
+                <div className="flex items-center gap-3">
+                  <Tv className="w-6 h-6 text-amber-400" />
+                  <h2 className="font-cinzel text-lg font-bold text-white">4K VİTRİN & TV CANLI KUR TAKİP EKRANI</h2>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    CANLI PİYASA
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1 font-mono flex items-center gap-2">
+                  <span>Kaynak: {liveRates?.source || 'Kapalıçarşı & TCMB'}</span>
+                  <span>•</span>
+                  <span>Son Güncelleme: {liveRates?.updated_at || 'Canlı Akıyor'}</span>
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-                  else document.exitFullscreen();
-                }}
-                className="btn-gold text-xs py-2 px-3"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>Tam Ekran Modu (F11)</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchLiveRates(true)}
+                  disabled={ratesLoading}
+                  className="btn-secondary text-xs py-2 px-3 border-amber-500/30 text-amber-300"
+                  title="Kurları Şimdi Güncelle"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${ratesLoading ? 'animate-spin' : ''}`} />
+                  <span>Yenile</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                  }}
+                  className="btn-gold text-xs py-2 px-3"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Tam Ekran Modu (F11)</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[
-                { name: 'HAS ALTIN (995)', purity: '24K Saf Altın', buy: '3.045,50', sell: '3.058,00', change: '+%0.42' },
-                { name: '22 AYAR BİLEZİK', purity: '22K Geleneksel', buy: '2.890,00', sell: '2.915,00', change: '+%0.28' },
-                { name: '14 AYAR TAKI ALTINI', purity: '14K Fantezi', buy: '1.820,00', sell: '1.865,00', change: '+%0.18' },
-                { name: 'ÇEYREK ZİYNET', purity: 'Eski / Yeni', buy: '4.980,00', sell: '5.035,00', change: '+%0.35' },
-                { name: 'YARIM ALTIN', purity: 'Darphane', buy: '9.960,00', sell: '10.070,00', change: '+%0.30' },
-                { name: 'ATA LİRA', purity: 'Cumhuriyet', buy: '20.450,00', sell: '20.680,00', change: '+%0.40' }
-              ].map(card => (
-                <div key={card.name} className="luxury-card p-6 border-amber-500/30 text-center">
-                  <div className="text-xs font-mono text-amber-400 font-bold uppercase mb-1">{card.purity}</div>
-                  <h3 className="font-cinzel text-xl font-bold text-white mb-4">{card.name}</h3>
-                  <div className="grid grid-cols-2 gap-4 my-2 py-3 bg-[#0e1017] rounded-xl border border-[#242938]">
-                    <div>
-                      <div className="text-[11px] text-slate-400 uppercase">ALIŞ (₺)</div>
-                      <div className="font-display text-2xl font-bold text-white mt-1">{card.buy}</div>
+            {/* Canlı Kurlar Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {(() => {
+                const defaultRates = [
+                  { code: 'HAS_ALTIN', name: 'HAS ALTIN (995)', purity: '24K Saf Altın', buy: 6818.14, sell: 6819.16, change: '+%0.75', currency: '₺' },
+                  { code: 'ALTIN_22K', name: '22 AYAR BİLEZİK', purity: '22K Geleneksel', buy: 6205.25, sell: 6210.98, change: '-%0.13', currency: '₺' },
+                  { code: 'ALTIN_18K', name: '18 AYAR MÜCEVHER', purity: '18K Mücevherat', buy: 4966.92, sell: 4971.51, change: '-%0.13', currency: '₺' },
+                  { code: 'ALTIN_14K', name: '14 AYAR TAKI ALTINI', purity: '14K Fantezi', buy: 3878.28, sell: 3881.86, change: '-%0.13', currency: '₺' },
+                  { code: 'CEYREK', name: 'ÇEYREK ZİYNET', purity: 'Eski / Yeni', buy: 10886.40, sell: 11134.82, change: '-%0.13', currency: '₺' },
+                  { code: 'YARIM', name: 'YARIM ALTIN', purity: 'Darphane', buy: 21704.76, sell: 22269.63, change: '-%0.13', currency: '₺' },
+                  { code: 'TAM', name: 'TAM ZİYNET', purity: 'Darphane', buy: 43545.60, sell: 44403.06, change: '-%0.13', currency: '₺' },
+                  { code: 'ATA', name: 'ATA LİRA', purity: 'Cumhuriyet', buy: 44906.40, sell: 46037.53, change: '-%0.13', currency: '₺' },
+                  { code: 'ONS', name: 'ONS ALTIN', purity: 'Uluslararası Spot', buy: 4345.20, sell: 4347.20, change: '+%0.45', currency: '$' },
+                  { code: 'USD', name: 'ABD DOLARI (USD)', purity: 'TCMB / Serbest', buy: 48.78, sell: 48.79, change: '+%0.11', currency: '₺' },
+                  { code: 'EUR', name: 'EURO (EUR)', purity: 'TCMB / Serbest', buy: 55.96, sell: 55.97, change: '-%0.24', currency: '₺' },
+                  { code: 'GUMUS', name: 'GÜMÜŞ (GRAM)', purity: '999 Saf Gümüş', buy: 104.43, sell: 104.52, change: '+%2.28', currency: '₺' }
+                ];
+
+                const rateItems = liveRates?.rates ? Object.values(liveRates.rates) : defaultRates;
+
+                return rateItems.map(card => {
+                  const isUp = (card.change || '').startsWith('+');
+                  return (
+                    <div key={card.name} className="luxury-card p-5 border-amber-500/30 text-center hover:border-amber-400 transition-all flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-mono text-amber-400 font-bold uppercase">{card.purity}</span>
+                          <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                            isUp ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30' : 'bg-red-950 text-red-400 border border-red-500/30'
+                          }`}>
+                            {card.change}
+                          </span>
+                        </div>
+                        <h3 className="font-cinzel text-base font-bold text-white mb-3 tracking-wide">{card.name}</h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 py-2.5 px-2 bg-[#0e1017] rounded-xl border border-[#242938]">
+                        <div>
+                          <div className="text-[10px] text-slate-400 uppercase font-mono">ALIŞ</div>
+                          <div className="font-display text-lg font-bold text-slate-200 mt-0.5">
+                            {card.currency === '$' ? '$' : ''}{Number(card.buy).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{card.currency === '₺' ? ' ₺' : ''}
+                          </div>
+                        </div>
+                        <div className="border-l border-[#242938]">
+                          <div className="text-[10px] text-amber-400 uppercase font-mono">SATIŞ</div>
+                          <div className="font-display text-lg font-bold text-amber-400 mt-0.5">
+                            {card.currency === '$' ? '$' : ''}{Number(card.sell).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{card.currency === '₺' ? ' ₺' : ''}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-[11px] text-amber-400 uppercase">SATIŞ (₺)</div>
-                      <div className="font-display text-2xl font-bold text-amber-400 mt-1">{card.sell}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -4125,38 +4475,126 @@ export default function Home() {
                   <tr>
                     <th className="p-3">Yuva No</th>
                     <th className="p-3">Etiket & Grup</th>
-                    <th className="p-3">Tür</th>
-                    <th className="p-3">IP Adresi</th>
-                    <th className="p-3">Asılı Modeller</th>
+                    <th className="p-3">Tür & IP</th>
+                    <th className="p-3">Durum</th>
+                    <th className="p-3">Asılı Modeller (Eşleşmeler)</th>
                     <th className="p-3">Toplam Yük</th>
-                    <th className="p-3 text-center">İşlem</th>
+                    <th className="p-3 text-center">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#242938]">
-                  {slots.map(s => (
-                    <tr key={s.id} className="hover:bg-[#191c26]/50 transition">
-                      <td className="p-3 font-mono font-bold text-amber-400">#{s.slot_number}</td>
-                      <td className="p-3 font-bold text-white">{s.label} ({s.group_name})</td>
-                      <td className="p-3 font-mono text-slate-300">{s.slot_type}</td>
-                      <td className="p-3 font-mono text-emerald-400 font-bold">{s.ip_address}</td>
-                      <td className="p-3 text-slate-300">
-                        {(s.products || []).length > 0 ? (
-                          <span className="font-semibold text-white">{(s.products || []).length} Model Asılı</span>
-                        ) : (
-                          <span className="text-slate-500 italic">Boş</span>
-                        )}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-amber-400">{s.expected_weight} gr</td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => { setSelectedSlotForEdit(s); setShowEditDeviceModal(true); }}
-                          className="btn-secondary text-[11px] py-1 px-2.5"
-                        >
-                          Düzenle
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {slots.map(s => {
+                    const isActive = s.is_active !== false;
+                    return (
+                      <tr key={s.id} className={`transition ${!isActive ? 'opacity-60 bg-red-950/10' : 'hover:bg-[#191c26]/50'}`}>
+                        <td className="p-3 font-mono font-bold text-amber-400">
+                          #{s.slot_number}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-white">{s.label}</div>
+                          <div className="text-[10px] text-slate-400">{s.group_name}</div>
+                        </td>
+                        <td className="p-3 font-mono">
+                          <div className="text-slate-300 font-semibold">{s.slot_type}</div>
+                          <div className="text-[11px] text-emerald-400 font-bold">{s.ip_address}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-col gap-1">
+                            {isActive ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Aktif
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-700 text-slate-400 w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                                Devre Dışı
+                              </span>
+                            )}
+                            {s.is_online ? (
+                              <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Çevrimiçi
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-mono text-slate-500 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span> Ping Yok
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          {(s.products || []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {s.products.map(p => (
+                                <span
+                                  key={p.id}
+                                  className="inline-flex items-center gap-1.5 bg-[#12141c] border border-amber-500/30 text-amber-200 text-[10px] px-2 py-0.5 rounded"
+                                >
+                                  <span>{p.name.slice(0, 20)}.. ({p.weight_grams}g)</span>
+                                  <button
+                                    title="Eşleşmeyi Kaldır (Askıdan Ayır)"
+                                    onClick={() => handleAssignProduct(s.id, p.id, 'REMOVE')}
+                                    className="text-red-400 hover:text-red-300 font-bold ml-1"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 italic text-[11px]">Asılı ürün yok (Boş)</span>
+                          )}
+                        </td>
+                        <td className="p-3 font-mono font-bold text-amber-400 whitespace-nowrap">
+                          {s.expected_weight} gr
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Canlı IP Test & Teşhis */}
+                            <button
+                              onClick={() => handlePingDevice(s)}
+                              className="text-[10px] py-1 px-2.5 rounded bg-blue-950/50 border border-blue-500/50 text-blue-300 hover:bg-blue-900/70 transition font-semibold flex items-center gap-1"
+                              title="Cihaz IP'sine Canlı İstek Gönder ve Teşhis Et"
+                            >
+                              <span>📡</span>
+                              <span>IP Test</span>
+                            </button>
+
+                            {/* Devre Dışı Bırak / Aktif Et */}
+                            <button
+                              onClick={() => handleToggleSlotActive(s.id)}
+                              title={isActive ? "Cihazı Devre Dışı Bırak" : "Cihazı Aktif Et"}
+                              className={`text-[10px] py-1 px-2 rounded border font-semibold transition ${
+                                isActive
+                                  ? 'bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/50'
+                                  : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50'
+                              }`}
+                            >
+                              {isActive ? 'Devre Dışı Bırak' : 'Aktif Et'}
+                            </button>
+
+                            {/* Düzenle & Eşle */}
+                            <button
+                              onClick={() => handleOpenEditDevice(s)}
+                              className="btn-secondary text-[10px] py-1 px-2"
+                              title="Cihaz Ayarları & Ürün Eşle"
+                            >
+                              Düzenle / Eşle
+                            </button>
+
+                            {/* Cihazı Kaldır (Sil) */}
+                            <button
+                              onClick={() => handleDeleteSlot(s.id, s.slot_number)}
+                              className="text-[10px] py-1 px-2 rounded bg-red-950/40 border border-red-500/40 text-red-400 hover:bg-red-900/60 transition font-semibold"
+                              title="Cihazı Sistemden Kaldır"
+                            >
+                              Kaldır
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -5336,55 +5774,112 @@ export default function Home() {
               <button onClick={() => setLiftMatchWizard(null)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
-            <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-500/40 text-xs mb-4">
+            {/* Üst Eksilen Bilgi Kartı */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-rose-950/50 via-[#1e131d] to-rose-950/30 border border-rose-500/50 text-xs mb-4">
               <div className="flex items-center justify-between font-mono">
-                <span>Eksilen Ağırlık:</span>
-                <strong className="text-rose-300 text-sm">{liftMatchWizard.weight_lost} gr</strong>
+                <span className="text-slate-300">Sensörün Ölçtüğü Net Eksilme:</span>
+                <span className="px-2.5 py-1 rounded bg-rose-900/60 border border-rose-500/60 text-rose-200 text-sm font-bold">
+                  {liftMatchWizard.weight_lost} gr
+                </span>
               </div>
-              <p className="text-[11px] text-slate-300 mt-1">
-                Lütfen müşteriye denetmek üzere askıdan aldığınız bileziği / modeli seçin. Seçtiğinizde ürün zimmetinize geçecek ve alarm susturulacaktır.
+              <p className="text-[11px] text-slate-300 mt-1.5 leading-relaxed">
+                Yoğun saatlerde zaman kaybetmemeniz için sistem askıdaki stok ve varyant gramaj kombinasyonlarını otomatik eşleştirdi.
               </p>
             </div>
 
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {liftMatchWizard.candidates.map(candidate => (
-                <div
-                  key={candidate.product_id}
-                  onClick={() => handleTakeIntoCustody(candidate.product_id, liftMatchWizard.slot_id)}
-                  className="p-3 bg-[#191c26] hover:bg-amber-500/10 border border-[#242938] hover:border-amber-500 rounded-xl cursor-pointer transition flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    {candidate.image_url ? (
-                      <img src={candidate.image_url} alt={candidate.product_name} className="w-12 h-12 object-cover rounded-lg border border-[#242938]" />
+            {/* EN OLASI EŞLEŞME - TEK TIKLA HIZLI ONAY KARTI */}
+            {liftMatchWizard.candidates && liftMatchWizard.candidates.length > 0 && (() => {
+              const best = liftMatchWizard.candidates[0];
+              const remainingStock = Math.max(0, (best.stock_available || 1) - (best.estimated_quantity || 1));
+              return (
+                <div className="p-4 rounded-xl bg-gradient-to-b from-emerald-950/40 via-[#101b17] to-[#12141c] border-2 border-emerald-500/80 shadow-xl mb-4 relative overflow-hidden">
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-bold font-mono text-[10px]">
+                    %{best.confidence_score} En Yüksek Uyum
+                  </div>
+
+                  <div className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider mb-1">
+                    ⚡ ÖNERİLEN AKILLI EŞLEŞME
+                  </div>
+
+                  <div className="flex items-start gap-3 mt-1">
+                    {best.image_url ? (
+                      <img src={best.image_url} alt={best.product_name} className="w-14 h-14 object-cover rounded-lg border border-emerald-500/40 shrink-0" />
                     ) : (
-                      <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 font-bold">
-                        🪙
+                      <div className="w-14 h-14 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xl shrink-0">
+                        💎
                       </div>
                     )}
-                    <div>
-                      <div className="font-bold text-xs text-white">{candidate.product_name}</div>
-                      <div className="text-[11px] text-amber-400 font-mono mt-0.5">
-                        {candidate.purity} • {candidate.weight_grams} gr (Fark: ±{candidate.diff_grams}g)
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-white truncate">{best.product_name}</h4>
+                      <div className="text-xs text-amber-300 font-mono font-semibold mt-0.5">
+                        {best.matched_variants_desc || `${best.estimated_quantity} Adet • ${best.total_calculated_weight} gr`}
                       </div>
-                      <div className="text-xs font-bold font-display text-white mt-1">
-                        {candidate.price.toLocaleString('tr-TR')} ₺
+                      <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+                        <span>Fark: <strong className="text-emerald-300">±{best.diff_grams}g</strong></span>
+                        <span>•</span>
+                        <span>Askıda Kalan: <strong className="text-white">{remainingStock} Adet</strong></span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                      candidate.confidence_score >= 80 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      %{candidate.confidence_score} Uyum
-                    </span>
-                    <button className="btn-gold text-[10px] py-1 px-2.5 mt-2 block ml-auto">
-                      Zimmetime Al ➔
-                    </button>
-                  </div>
+                  {/* Dev Tek Tıkla Onay Butonu */}
+                  <button
+                    onClick={() => handleTakeCandidateIntoCustody(best, liftMatchWizard.slot_id)}
+                    className="w-full mt-3.5 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition active:scale-[0.99]"
+                  >
+                    <span>⚡</span>
+                    <span>Bu {best.estimated_quantity} Adedi Tek Tıkla Masama Al (Alarmı Kapat)</span>
+                    <span className="font-mono text-[11px] opacity-80">({best.total_calculated_weight}g)</span>
+                  </button>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
+
+            {/* DİĞER OLASI MODELLER VE ADET SEÇENEKLERİ */}
+            {liftMatchWizard.candidates && liftMatchWizard.candidates.length > 1 && (
+              <div>
+                <div className="text-[11px] font-mono text-slate-400 mb-2 uppercase tracking-wide">
+                  Diğer Olası Askı Eşleşmeleri:
+                </div>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {liftMatchWizard.candidates.slice(1).map(candidate => (
+                    <div
+                      key={candidate.product_id}
+                      onClick={() => handleTakeCandidateIntoCustody(candidate, liftMatchWizard.slot_id)}
+                      className="p-3 bg-[#161822] hover:bg-amber-500/10 border border-[#242938] hover:border-amber-500/50 rounded-xl cursor-pointer transition flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {candidate.image_url ? (
+                          <img src={candidate.image_url} alt={candidate.product_name} className="w-10 h-10 object-cover rounded-lg border border-[#242938] shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 font-bold shrink-0">
+                            🪙
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs text-white truncate">{candidate.product_name}</div>
+                          <div className="text-[11px] text-amber-400 font-mono">
+                            {candidate.matched_variants_desc || `${candidate.estimated_quantity} Adet • ${candidate.total_calculated_weight} gr`}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Fark: ±{candidate.diff_grams}g • {candidate.price?.toLocaleString('tr-TR')} ₺
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-800 text-slate-300">
+                          %{candidate.confidence_score} Uyum
+                        </span>
+                        <button className="btn-secondary text-[10px] py-1 px-2 mt-1.5 block ml-auto">
+                          Seç & Zimmetle ➔
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -6081,6 +6576,516 @@ export default function Home() {
         </div>
       )}
 
+      {/* ================= IOT CİHAZ DÜZENLEME & ÜRÜN EŞLEME MODALI ================= */}
+      {showEditDeviceModal && selectedSlotForEdit && (
+        <div className="modal-overlay" onClick={() => setShowEditDeviceModal(false)}>
+          <div className="modal-content max-w-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-[#242938] mb-4">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-amber-400 font-bold text-sm bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/40">
+                  #{selectedSlotForEdit.slot_number}
+                </span>
+                <h3 className="font-cinzel text-base font-bold text-white">
+                  IOT CİHAZ & ASKI YÖNETİMİ
+                </h3>
+              </div>
+              <button onClick={() => setShowEditDeviceModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            {/* Cihaz Durumu & Hızlı Aktif/Pasif Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#0e1017] border border-[#242938] mb-4">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-2">
+                  <span>Cihaz Çalışma Durumu:</span>
+                  {selectedSlotForEdit.is_active !== false ? (
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Aktif (Sistem Tarafından İzleniyor)
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 font-bold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                      Devre Dışı (Pasif / Alarm Üretmez)
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Devre dışı bırakıldığında bu cihazdan gelen ağırlık değişiklikleri alarm tetiklemez.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  handleToggleSlotActive(selectedSlotForEdit.id);
+                  setEditDeviceFormData({ ...editDeviceFormData, is_active: !editDeviceFormData.is_active });
+                  setSelectedSlotForEdit({ ...selectedSlotForEdit, is_active: !selectedSlotForEdit.is_active });
+                }}
+                className={`text-xs py-1.5 px-3 rounded font-bold transition border ${
+                  selectedSlotForEdit.is_active !== false
+                    ? 'bg-amber-950/60 border-amber-500/40 text-amber-300 hover:bg-amber-900/60'
+                    : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
+                }`}
+              >
+                {selectedSlotForEdit.is_active !== false ? '🔴 Devre Dışı Bırak' : '🟢 Aktif Et'}
+              </button>
+            </div>
+
+            {/* Cihaz Yapılandırma Formu */}
+            <form onSubmit={handleUpdateSlotConfig} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Cihaz / Askı Etiketi</label>
+                  <input
+                    type="text"
+                    required
+                    value={editDeviceFormData.label}
+                    onChange={(e) => setEditDeviceFormData({ ...editDeviceFormData, label: e.target.value })}
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Cihaz Türü</label>
+                  <select
+                    value={editDeviceFormData.slot_type}
+                    onChange={(e) => setEditDeviceFormData({ ...editDeviceFormData, slot_type: e.target.value })}
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  >
+                    <option value="Askı">Askılık</option>
+                    <option value="Tabla">Yüzük Tablası</option>
+                    <option value="Tepsi">Bilezik Tepsisi</option>
+                    <option value="Kasa Bölmesi">Kasa Bölmesi</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Bölüm / Grup</label>
+                  <input
+                    type="text"
+                    required
+                    value={editDeviceFormData.group_name}
+                    onChange={(e) => setEditDeviceFormData({ ...editDeviceFormData, group_name: e.target.value })}
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Cihaz ID</label>
+                  <input
+                    type="text"
+                    value={editDeviceFormData.device_id}
+                    onChange={(e) => setEditDeviceFormData({ ...editDeviceFormData, device_id: e.target.value })}
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">IP Adresi</label>
+                  <input
+                    type="text"
+                    required
+                    value={editDeviceFormData.ip_address}
+                    onChange={(e) => setEditDeviceFormData({ ...editDeviceFormData, ip_address: e.target.value })}
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Tolerans Sapması (Gram)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editDeviceFormData.tolerance_grams}
+                    onChange={(e) => setEditDeviceFormData({ ...editDeviceFormData, tolerance_grams: e.target.value })}
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* ================= ÜRÜN EŞLEŞTİRME YÖNETİMİ ================= */}
+              <div className="pt-3 border-t border-[#242938]">
+                <h4 className="text-white font-bold mb-2 flex items-center justify-between">
+                  <span>Bu Cihaza / Askıya Eşlenmiş Modeller</span>
+                  <span className="text-[11px] font-mono text-amber-400">
+                    Toplam: {(selectedSlotForEdit.products || []).reduce((acc, p) => acc + p.weight_grams, 0).toFixed(2)} gr
+                  </span>
+                </h4>
+
+                {/* Mevcut Eşleşmiş Ürünler */}
+                <div className="space-y-1.5 mb-3 max-h-36 overflow-y-auto">
+                  {(selectedSlotForEdit.products || []).length > 0 ? (
+                    selectedSlotForEdit.products.map(p => (
+                      <div key={p.id} className="flex items-center justify-between p-2 rounded bg-[#0e1017] border border-[#242938]">
+                        <div>
+                          <span className="font-semibold text-white">{p.name}</span>
+                          <span className="text-amber-400 font-mono ml-2 font-bold">{p.weight_grams} gr</span>
+                          <span className="text-slate-400 text-[10px] ml-2 font-mono">({p.barcode})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await handleAssignProduct(selectedSlotForEdit.id, p.id, 'REMOVE');
+                            setSelectedSlotForEdit(prev => ({
+                              ...prev,
+                              products: (prev.products || []).filter(x => x.id !== p.id)
+                            }));
+                          }}
+                          className="text-red-400 hover:text-red-300 text-xs font-bold px-2 py-0.5 rounded bg-red-950/40 border border-red-500/30"
+                        >
+                          ✕ Eşleşmeyi Kaldır
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-500 italic p-2 bg-[#0e1017] rounded text-center">
+                      Bu yuvaya bağlı ürün bulunmuyor. Aşağıdan yeni ürün eşleyebilirsiniz.
+                    </div>
+                  )}
+                </div>
+
+                {/* Yeni Ürün Eşle */}
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={assignSelectedProductId}
+                    onChange={(e) => setAssignSelectedProductId(e.target.value)}
+                    className="flex-1 bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                  >
+                    <option value="">-- Cihaza Eşlenecek Ürün Seçin --</option>
+                    {products
+                      .filter(p => p.status !== 'Satıldı' && (!p.slot_id || p.slot_id !== selectedSlotForEdit.id))
+                      .map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.weight_grams}g) - {p.status} {p.slot_id ? `(Askı #${p.slot_id})` : '(Kasada)'}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!assignSelectedProductId) return;
+                      await handleAssignProduct(selectedSlotForEdit.id, assignSelectedProductId, 'ADD');
+                      const newlyAdded = products.find(x => x.id === parseInt(assignSelectedProductId));
+                      if (newlyAdded) {
+                        setSelectedSlotForEdit(prev => ({
+                          ...prev,
+                          products: [...(prev.products || []), newlyAdded]
+                        }));
+                      }
+                      setAssignSelectedProductId('');
+                    }}
+                    className="btn-gold text-xs py-2 px-3 whitespace-nowrap font-bold"
+                  >
+                    + Ürünü Eşle
+                  </button>
+                </div>
+              </div>
+
+              {/* Alt Butonlar */}
+              <div className="flex items-center justify-between pt-4 border-t border-[#242938]">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSlot(selectedSlotForEdit.id, selectedSlotForEdit.slot_number)}
+                  className="text-xs py-2 px-3 rounded bg-red-950/60 border border-red-500/50 text-red-300 hover:bg-red-900/60 font-bold transition"
+                >
+                  🗑️ Cihazı Sistemden Tamamen Kaldır
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditDeviceModal(false)}
+                    className="btn-secondary text-xs py-2 px-3"
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-gold text-xs py-2 px-4 font-bold"
+                  >
+                    Ayarları Kaydet
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= IOT DONANIM & CANLI IP TEŞHİS MODALI ================= */}
+      {showDeviceDiagModal && selectedSlotForDiag && (
+        <div className="modal-overlay" onClick={() => setShowDeviceDiagModal(false)}>
+          <div className="modal-content max-w-xl" onClick={e => e.stopPropagation()}>
+            {/* Başlık */}
+            <div className="flex items-center justify-between pb-4 border-b border-[#242938]">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-base">
+                  📡
+                </span>
+                <div>
+                  <h3 className="font-cinzel text-base font-bold text-white">
+                    IOT DONANIM & CANLI IP TEŞHİSİ
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Cihazın yerel IP adresine doğrudan HTTP ping ve durum sorgusu
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDeviceDiagModal(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Cihaz Üst Bilgi Kartı */}
+            <div className="mt-4 p-3 rounded-lg bg-[#12141c] border border-[#242938] flex items-center justify-between text-xs">
+              <div>
+                <span className="text-amber-400 font-mono font-bold mr-2">#{selectedSlotForDiag.slot_number}</span>
+                <span className="text-white font-semibold">{selectedSlotForDiag.label}</span>
+                <span className="text-slate-500 ml-2">({selectedSlotForDiag.slot_type})</span>
+              </div>
+              <div className="font-mono text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded">
+                http://{selectedSlotForDiag.ip_address}:{selectedSlotForDiag.port || 80}
+              </div>
+            </div>
+
+            {/* Teşhis Durum İçeriği */}
+            <div className="my-5">
+              {deviceDiagLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3">
+                  <div className="w-10 h-10 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                  <div className="text-sm font-semibold text-white">Cihaz IP'sine İstek Gönderiliyor...</div>
+                  <div className="text-xs text-slate-400 font-mono">
+                    GET http://{selectedSlotForDiag.ip_address}:{selectedSlotForDiag.port || 80}/api/status
+                  </div>
+                </div>
+              ) : deviceDiagResult?.reachable ? (
+                <div className="space-y-4">
+                  {/* Başarılı Bağlantı Başlığı */}
+                  <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="text-emerald-300 font-bold text-xs uppercase tracking-wide">
+                        Bağlantı Başarılı & Cihaz Çevrimiçi
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-900/50 px-2 py-0.5 rounded border border-emerald-500/40">
+                      Gecikme: {deviceDiagResult.latency_ms} ms
+                    </span>
+                  </div>
+
+                  {/* Donanım Metrikleri */}
+                  <div className="grid grid-cols-3 gap-2.5 text-xs">
+                    <div className="p-2.5 rounded bg-[#12141c] border border-[#242938]">
+                      <div className="text-slate-400 text-[10px] uppercase font-mono">Wi-Fi Sinyali (RSSI)</div>
+                      <div className="text-white font-bold font-mono mt-1 text-sm flex items-center gap-1.5">
+                        <span>📶</span>
+                        <span>{deviceDiagResult.device_data?.wifi_rssi ?? deviceDiagResult.device_data?.wifi?.rssi ?? -45} dBm</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-400 mt-0.5">Güçlü Bağlantı</div>
+                    </div>
+
+                    <div className="p-2.5 rounded bg-[#12141c] border border-[#242938]">
+                      <div className="text-slate-400 text-[10px] uppercase font-mono">Çalışma Süresi (Uptime)</div>
+                      <div className="text-white font-bold font-mono mt-1 text-sm flex items-center gap-1.5">
+                        <span>⏱️</span>
+                        <span>{deviceDiagResult.device_data?.uptime ?? (deviceDiagResult.device_data?.uptime_seconds ? `${deviceDiagResult.device_data?.uptime_seconds} sn` : '0 sn')}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Kesintisiz</div>
+                    </div>
+
+                    <div className="p-2.5 rounded bg-[#12141c] border border-[#242938]">
+                      <div className="text-slate-400 text-[10px] uppercase font-mono">Yazılım (Firmware)</div>
+                      <div className="text-white font-bold font-mono mt-1 text-sm truncate">
+                        {deviceDiagResult.device_data?.firmware_version ?? deviceDiagResult.device_data?.firmware ?? 'PicoW-v2.1'}
+                      </div>
+                      <div className="text-[10px] text-blue-400 mt-0.5">MicroPython</div>
+                    </div>
+                  </div>
+
+                  {/* Cihaz Gömülü Web Portalı Bağlantısı */}
+                  <div className="p-3 rounded-lg bg-gradient-to-r from-blue-950/40 via-[#151928] to-purple-950/40 border border-blue-500/30 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>🌐</span>
+                        <span>Dahili Cihaz Web Yönetim Portalı</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        Pico W üzerinde doğrudan çalışan web arayüzünü tarayıcınızda açın.
+                      </div>
+                    </div>
+                    <a
+                      href={`http://${selectedSlotForDiag.ip_address}:${selectedSlotForDiag.port || 80}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-gold text-xs py-1.5 px-3 whitespace-nowrap font-bold flex items-center gap-1"
+                    >
+                      <span>Portalı Aç</span>
+                      <span>↗</span>
+                    </a>
+                  </div>
+
+                  {/* Ham JSON Yanıtı */}
+                  <details className="text-[11px] bg-[#12141c] p-2.5 rounded border border-[#242938]">
+                    <summary className="text-slate-400 cursor-pointer font-mono font-semibold">
+                      📋 Cihazdan Dönen Ham JSON Verisi
+                    </summary>
+                    <pre className="mt-2 p-2 bg-black/50 rounded text-emerald-400 font-mono text-[10px] overflow-x-auto">
+                      {JSON.stringify(deviceDiagResult.device_data, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Hata Kartı */}
+                  <div className="p-3.5 rounded-lg bg-red-950/30 border border-red-500/50 flex items-start gap-3">
+                    <span className="text-red-400 text-lg">⚠️</span>
+                    <div>
+                      <div className="text-red-300 font-bold text-xs uppercase tracking-wide">
+                        Cihaza Ulaşılamadı (Bağlantı Zaman Aşımı)
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-1">
+                        {deviceDiagResult?.message || 'IP adresi üzerinde HTTP isteğine yanıt alınamadı.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Sorun Giderme Adımları */}
+                  <div className="p-3.5 rounded-lg bg-[#12141c] border border-[#242938] text-xs space-y-2">
+                    <div className="font-bold text-amber-300 flex items-center gap-1">
+                      <span>🛠️</span>
+                      <span>Olası Nedenler & Kontrol Listesi</span>
+                    </div>
+                    <ul className="text-slate-300 text-[11px] space-y-1.5 list-disc pl-4">
+                      <li>
+                        <strong>Güç & Donanım:</strong> Pico W kartının USB kablosu takılı ve LED ışığı yanıyor mu?
+                      </li>
+                      <li>
+                        <strong>Wi-Fi Bağlantısı:</strong> Pico W kodundaki SSID ve Şifre mağaza Wi-Fi ağı ile eşleşiyor mu?
+                      </li>
+                      <li>
+                        <strong>IP Yapılandırması:</strong> Girilen IP (<code className="text-amber-400 font-mono">{selectedSlotForDiag.ip_address}</code>) router DHCP tarafından Pico W'ya atanan IP ile aynı mı?
+                      </li>
+                      <li>
+                        <strong>Ağ İzolasyonu:</strong> ERP sunucusu ile Pico cihazı aynı yerel ağda (subnet) mi?
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Alt Butonlar */}
+            <div className="flex items-center justify-between pt-4 border-t border-[#242938]">
+              <button
+                type="button"
+                onClick={() => handlePingDevice(selectedSlotForDiag)}
+                disabled={deviceDiagLoading}
+                className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+              >
+                <span>🔄</span>
+                <span>Yeniden Teşhis Et</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDeviceDiagModal(false)}
+                className="btn-gold text-xs py-2 px-4 font-bold"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= ADETLİ ÜRÜN ZİMMET SEÇİM MODALI ================= */}
+      {takeCustodyModal && (
+        <div className="modal-overlay" onClick={() => setTakeCustodyModal(null)}>
+          <div className="modal-content max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-[#242938] mb-3">
+              <h3 className="font-cinzel text-sm font-bold text-white flex items-center gap-2">
+                <span>📦</span>
+                <span>ZİMMETE ALINACAK ADET</span>
+              </h3>
+              <button onClick={() => setTakeCustodyModal(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-[#0e1017] rounded-lg border border-[#242938]">
+                <div className="font-bold text-white text-sm">{takeCustodyModal.product?.name}</div>
+                <div className="flex items-center justify-between mt-1 text-slate-400">
+                  <span>Birim Ağırlık:</span>
+                  <span className="font-mono text-amber-400 font-bold">{takeCustodyModal.product?.weight_grams} gr</span>
+                </div>
+                <div className="flex items-center justify-between mt-1 text-slate-400">
+                  <span>Askıda Mevcut Adet:</span>
+                  <span className="font-mono text-emerald-400 font-bold">{takeCustodyModal.maxQty} Adet</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1.5">Kaç adet masaya / zimmete alacaksınız?</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTakeCustodyModal(prev => ({ ...prev, selectedQty: Math.max(1, (prev.selectedQty || 1) - 1) }))}
+                    className="w-8 h-8 rounded bg-[#191c26] border border-[#242938] text-white font-bold text-base hover:bg-amber-500/20"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max={takeCustodyModal.maxQty}
+                    value={takeCustodyModal.selectedQty}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value) || 1;
+                      setTakeCustodyModal(prev => ({ ...prev, selectedQty: Math.min(prev.maxQty, Math.max(1, v)) }));
+                    }}
+                    className="flex-1 text-center bg-[#0e1017] border border-[#242938] text-amber-400 font-bold font-mono text-base rounded p-1.5 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setTakeCustodyModal(prev => ({ ...prev, selectedQty: Math.min(prev.maxQty, (prev.selectedQty || 1) + 1) }))}
+                    className="w-8 h-8 rounded bg-[#191c26] border border-[#242938] text-white font-bold text-base hover:bg-amber-500/20"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-2 bg-amber-950/20 border border-amber-500/20 rounded flex justify-between items-center text-[11px]">
+                <span className="text-slate-300">Askıdan Eksilecek Toplam Yük:</span>
+                <span className="font-mono font-bold text-amber-400">
+                  {((takeCustodyModal.product?.weight_grams || 0) * (takeCustodyModal.selectedQty || 1)).toFixed(2)} gr
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setTakeCustodyModal(null)}
+                  className="btn-secondary flex-1 py-2 justify-center"
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeTakeIntoCustody(takeCustodyModal.productId, takeCustodyModal.slotId, takeCustodyModal.selectedQty)}
+                  className="btn-gold flex-1 py-2 justify-center font-bold"
+                >
+                  {takeCustodyModal.selectedQty} Adet Zimmete Al
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {/* ================= RESMİ HESAP PUSULASI & DARPHANE AYAR DAMGASI MODALI ================= */}
       {showPusulaModal && selectedSaleForPusula && (
         <div className="modal-overlay" onClick={() => setShowPusulaModal(false)}>
@@ -6518,12 +7523,20 @@ export default function Home() {
 
                   {/* Dinamik Fiyat Göstergesi */}
                   {(() => {
-                    const goldRate = marketData?.altin_gram || 3100;
+                    const hasAltinRate = Number(liveRates?.rates?.HAS_ALTIN?.sell) || goldPrice || 6825;
+                    let goldRate = hasAltinRate;
+                    if (selectedProductDetail.purity === '22K' && liveRates?.rates?.ALTIN_22K?.sell) {
+                      goldRate = Number(liveRates.rates.ALTIN_22K.sell);
+                    } else if (selectedProductDetail.purity === '18K' && liveRates?.rates?.ALTIN_18K?.sell) {
+                      goldRate = Number(liveRates.rates.ALTIN_18K.sell);
+                    } else if (selectedProductDetail.purity === '14K' && liveRates?.rates?.ALTIN_14K?.sell) {
+                      goldRate = Number(liveRates.rates.ALTIN_14K.sell);
+                    }
                     const baseWeight = selectedProductDetail.weight_grams || 0;
                     const baseLabor = selectedProductDetail.labor_cost || 0;
                     const matchedVariant = productVariantsList.find(v => v.color === detailSelectedColor && v.size_or_length === detailSelectedSize);
                     const addLabor = matchedVariant ? matchedVariant.additional_labor : 0;
-                    const liveCalculated = (baseWeight * goldRate) + baseLabor + addLabor;
+                    const liveCalculated = Math.round((baseWeight * goldRate) + baseLabor + addLabor);
 
                     return (
                       <div className="bg-gradient-to-r from-[#171a26] to-[#12141c] border border-amber-500/40 rounded-xl p-3.5 space-y-1.5">
@@ -6580,7 +7593,7 @@ export default function Home() {
 
                     <button
                       onClick={() => {
-                        const calculated = (selectedProductDetail.weight_grams * (marketData?.altin_gram || 3100)) + (selectedProductDetail.labor_cost || 0);
+                        const calculated = getProductLivePrice(selectedProductDetail);
                         setReservationFormData({
                           customer_id: customers[0]?.id || '',
                           product_id: selectedProductDetail.id,
@@ -7153,6 +8166,55 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CANLI IOT DONANIM & KOPMA BİLDİRİM TOASTI ================= */}
+      {deviceAlertToast && (
+        <div className="fixed top-6 right-6 z-[9999] max-w-md w-full animate-in fade-in slide-in-from-top-4 duration-300">
+          <div
+            className={`p-4 rounded-xl border shadow-2xl backdrop-blur-md transition-all ${
+              deviceAlertToast.type === 'error'
+                ? 'bg-red-950/95 border-red-500 text-red-100 shadow-red-950/80 ring-2 ring-red-500/30'
+                : 'bg-emerald-950/95 border-emerald-500 text-emerald-100 shadow-emerald-950/80 ring-2 ring-emerald-500/30'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">
+                  {deviceAlertToast.type === 'error' ? '🚨' : '🟢'}
+                </span>
+                <div>
+                  <div className="font-bold text-sm tracking-wide">
+                    {deviceAlertToast.title}
+                  </div>
+                  <div className="text-xs mt-1 opacity-90 leading-relaxed">
+                    {deviceAlertToast.message}
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[10px] opacity-70 font-mono">
+                      Saat: {deviceAlertToast.time}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setActiveTab('iot_devices');
+                        setDeviceAlertToast(null);
+                      }}
+                      className="text-[11px] font-bold underline hover:opacity-80 transition"
+                    >
+                      IoT Dağıtım Tablosuna Git →
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setDeviceAlertToast(null)}
+                className="text-slate-300 hover:text-white text-base font-bold p-1 leading-none"
+              >
+                ✕
+              </button>
             </div>
           </div>
         </div>

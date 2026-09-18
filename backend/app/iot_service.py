@@ -53,15 +53,62 @@ async def process_telemetry(db: Session, slot_number: int, current_weight: float
         db.commit()
         db.refresh(slot)
 
+    now = datetime.datetime.utcnow()
+    was_offline = (slot.is_online is False)
+    slot.last_ping = now
+    slot.is_online = True
+    slot.updated_at = now
+
     old_weight = slot.current_weight
     slot.current_weight = round(current_weight, 2)
-    slot.updated_at = datetime.datetime.utcnow()
+
+    # Eğer cihaz daha önce kopmuş ve şimdi tekrar bağlandıysa bildirim & log üret
+    if was_offline and slot.is_active:
+        reconnect_msg = f"🟢 [IOT BAĞLANTI YENİLENDİ] #{slot.slot_number} numaralı '{slot.label}' IoT cihazı sunucuya tekrar bağlandı."
+        sys_log = models.SystemLog(
+            level="INFO",
+            module="IOT_SYSTEM",
+            message=reconnect_msg,
+            user_name="IoT Servisi",
+            details_json=json.dumps({
+                "event": "DEVICE_RECONNECTED",
+                "slot_number": slot.slot_number,
+                "slot_id": slot.id,
+                "label": slot.label,
+                "ip_address": slot.ip_address
+            })
+        )
+        db.add(sys_log)
+        # Arka planda WebSocket ile istemcilere bildir
+        try:
+            await manager.broadcast({
+                "type": "DEVICE_ONLINE",
+                "slot_number": slot.slot_number,
+                "slot_id": slot.id,
+                "label": slot.label,
+                "ip_address": slot.ip_address,
+                "message": reconnect_msg,
+                "timestamp": now.isoformat()
+            })
+        except Exception:
+            pass
+
+    # Eğer cihaz devre dışı (pasif) bırakılmışsa alarm üretme
+    if slot.is_active is False or slot.status == "DISABLED":
+        db.commit()
+        return {
+            "type": "DISABLED_SLOT",
+            "slot_number": slot.slot_number,
+            "slot_id": slot.id,
+            "status": "DISABLED",
+            "message": "Cihaz devre dışı (pasif) durumdadır."
+        }
 
     event_type = "WEIGHT_UPDATE"
     alert_triggered = False
     alert_info = None
 
-    product = slot.product
+    product = slot.products[0] if slot.products else None
 
     # Eğer askıda tanımlı bir ürün varsa:
     if product and slot.expected_weight > 0:

@@ -236,6 +236,7 @@ class RackSlotBase(BaseModel):
     ip_address: str = "192.168.1.100"
     port: int = 80
     is_online: bool = True
+    is_active: bool = True
     expected_weight: float = 0.0
     current_weight: float = 0.0
     tolerance_grams: float = 0.20
@@ -247,6 +248,7 @@ class RackSlotOut(RackSlotBase):
     id: int
     product_id: Optional[int] = None
     products: List[ProductOut] = []
+    last_ping: Optional[datetime.datetime] = None
     updated_at: datetime.datetime
 
     class Config:
@@ -255,6 +257,7 @@ class RackSlotOut(RackSlotBase):
 class SlotAssignRequest(BaseModel):
     product_id: int
     action: str = "ADD" # ADD veya REMOVE
+    quantity: Optional[int] = None # Kaç adet atanacak veya çıkarılacak
 
 class SlotCreateRequest(BaseModel):
     slot_number: int
@@ -270,9 +273,12 @@ class SlotDeviceConfigUpdate(BaseModel):
     label: Optional[str] = None
     slot_type: Optional[str] = None
     group_name: Optional[str] = None
+    device_id: Optional[str] = None
     ip_address: Optional[str] = None
     port: Optional[int] = None
     tolerance_grams: Optional[float] = None
+    is_active: Optional[bool] = None
+    is_online: Optional[bool] = None
 
 class SetAuthorizedInspectionRequest(BaseModel):
     authorized: bool = True
@@ -288,6 +294,12 @@ class LiftCandidate(BaseModel):
     image_url: Optional[str] = None
     diff_grams: float
     confidence_score: int # 0 - 100
+    estimated_quantity: int = 1
+    total_calculated_weight: float = 0.0
+    stock_available: int = 1
+    matched_variants_desc: Optional[str] = None
+    variant_ids: List[int] = []
+    has_variants: bool = False
 
 class IdentifyLiftResponse(BaseModel):
     slot_number: int
@@ -298,7 +310,10 @@ class IdentifyLiftResponse(BaseModel):
 class CustodyTakeRequest(BaseModel):
     product_id: int
     slot_id: int
+    quantity: Optional[int] = 1 # Kaç adet alınacak (Varsayılan 1)
     user_id: Optional[int] = None
+    variant_ids: Optional[List[int]] = None
+    actual_grams: Optional[float] = None
 
 class CustodyReturnRequest(BaseModel):
     product_id: int

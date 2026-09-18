@@ -6,9 +6,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import asyncio
 from .database import engine, Base, SessionLocal
 from . import models, iot_service, auth
-from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches
+from .iot_watchdog import run_iot_watchdog
+from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates
 
 from sqlalchemy import text
 
@@ -17,7 +19,8 @@ def run_sqlite_migrations():
         for alter_stmt in [
             "ALTER TABLE branches ADD COLUMN branch_code VARCHAR(30) DEFAULT 'BR-01'",
             "ALTER TABLE branches ADD COLUMN region VARCHAR(50) DEFAULT 'Marmara'",
-            "ALTER TABLE rack_slots ADD COLUMN location_code VARCHAR(50)"
+            "ALTER TABLE rack_slots ADD COLUMN location_code VARCHAR(50)",
+            "ALTER TABLE rack_slots ADD COLUMN is_active BOOLEAN DEFAULT 1"
         ]:
             try:
                 conn.execute(text(alter_stmt))
@@ -585,7 +588,9 @@ def seed_initial_data():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     seed_initial_data()
+    watchdog_task = asyncio.create_task(run_iot_watchdog())
     yield
+    watchdog_task.cancel()
 
 app = FastAPI(
     title="Sarraf Erdem ERP & IoT Vitrin Güvenlik Sistemi",
@@ -617,6 +622,7 @@ app.include_router(inventory.router)
 app.include_router(security.router)
 app.include_router(legal.router)
 app.include_router(branches.router)
+app.include_router(rates.router)
 
 @app.get("/")
 def health_check():

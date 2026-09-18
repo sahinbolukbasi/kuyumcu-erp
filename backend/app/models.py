@@ -185,6 +185,7 @@ class RackSlot(Base):
     ip_address = Column(String(50), default="192.168.1.100")
     port = Column(Integer, default=80)
     is_online = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True) # Cihaz aktif / devre dışı
     last_ping = Column(DateTime, nullable=True)
     expected_weight = Column(Float, default=0.0)
     current_weight = Column(Float, default=0.0)
