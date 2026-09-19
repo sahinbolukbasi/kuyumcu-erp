@@ -949,3 +949,131 @@ class DailyReportOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# =========================================================================
+# MULTI-TENANT SAAS, LİSANS, FİRMA YÖNETİMİ & MALİYET ŞEMALARI
+# =========================================================================
+
+class TenantCompanyCreate(BaseModel):
+    company_name: str
+    owner_name: str
+    contact_phone: str
+    contact_email: str
+    city: Optional[str] = "İstanbul"
+    tax_id: Optional[str] = None
+    
+    # Lisans Paketi
+    plan_type: Optional[str] = "YEARLY" # MONTHLY, YEARLY, TRIAL, ENTERPRISE
+    billing_cycle: Optional[str] = "YEARLY" # MONTHLY, YEARLY
+    subscription_fee: Optional[float] = 48000.0
+    currency: Optional[str] = "TRY"
+    duration_months: Optional[int] = 12
+    
+    # Kullanıcı & Sistem Sınırlandırma Kotaları
+    max_admin_count: Optional[int] = 2
+    max_staff_count: Optional[int] = 5
+    max_branches_count: Optional[int] = 2
+    max_showcase_slots: Optional[int] = 100
+    
+    # İlk Müşteri Admin Hesabı (Sistemi Kullanacak İlk Yönetici)
+    admin_username: str
+    admin_password: str
+    admin_full_name: str
+
+
+class TenantLicenseOut(BaseModel):
+    license_key: str
+    plan_type: str
+    billing_cycle: str
+    subscription_fee: float
+    currency: str
+    status: str
+    start_date: datetime.datetime
+    end_date: datetime.datetime
+    days_remaining: int
+    auto_renew: bool
+    
+    # Kotalar
+    max_admin_count: int
+    max_staff_count: int
+    max_branches_count: int
+    max_showcase_slots: int
+    storage_limit_mb: int
+
+    class Config:
+        from_attributes = True
+
+
+class TenantCompanyOut(BaseModel):
+    id: int
+    company_code: str
+    company_name: str
+    owner_name: str
+    contact_phone: str
+    contact_email: str
+    city: str
+    tax_id: Optional[str] = None
+    is_active: bool
+    created_at: datetime.datetime
+    
+    # Lisans Bilgileri
+    license: Optional[TenantLicenseOut] = None
+    
+    # Gerçek Kullanım Sayımları
+    current_admin_count: int = 1
+    current_staff_count: int = 0
+    current_branches_count: int = 1
+    current_slots_count: int = 0
+    active_online_users: int = 1
+    
+    # Tahmini Bulut Maliyeti
+    estimated_server_cost_usd: float = 4.50
+    estimated_server_cost_try: float = 185.0
+    net_saas_profit_try: float = 3815.0
+
+    class Config:
+        from_attributes = True
+
+
+class TenantLicenseUpdate(BaseModel):
+    plan_type: Optional[str] = None
+    billing_cycle: Optional[str] = None
+    subscription_fee: Optional[float] = None
+    status: Optional[str] = None # ACTIVE, EXPIRED, SUSPENDED
+    extend_months: Optional[int] = None
+    max_admin_count: Optional[int] = None
+    max_staff_count: Optional[int] = None
+    max_branches_count: Optional[int] = None
+    max_showcase_slots: Optional[int] = None
+
+
+class TenantBackupOut(BaseModel):
+    id: int
+    tenant_id: Optional[int] = None
+    backup_type: str
+    file_name: str
+    file_size_mb: float
+    status: str
+    notes: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SystemCostAnalyticsOut(BaseModel):
+    total_companies: int
+    active_licenses: int
+    expired_licenses: int
+    suspended_licenses: int
+    total_active_online_users: int
+    total_monthly_recurring_revenue_try: float # MRR
+    total_annual_recurring_revenue_try: float # ARR
+    total_cloud_cost_usd: float
+    total_cloud_cost_try: float
+    net_saas_profit_try: float
+    profit_margin_percent: float
+    per_user_cloud_cost_try: float
+    last_nightly_backup_status: str
+    last_nightly_backup_time: Optional[str] = None

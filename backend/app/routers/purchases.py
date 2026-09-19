@@ -101,8 +101,9 @@ def create_gold_purchase(
     # 7. Sistem Denetim Günlüğüne İşle
     log_entry = models.SystemLog(
         level="INFO",
-        source="GOLD_PURCHASE",
+        module="GOLD_PURCHASE",
         user_id=buyer_id,
+        user_name=buyer_name,
         message=f"{buyer_name} tarafından {weight} gr {purity_clean} ({pure_grams} gr Has) altın satın alındı. Ödenen: {total_paid:,.2f} TL (Fiş: {receipt_no})"
     )
     db.add(log_entry)

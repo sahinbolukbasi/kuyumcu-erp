@@ -12,6 +12,7 @@ class User(Base):
     full_name = Column(String(100), nullable=False)
     role = Column(String(20), default="STAFF") # ADMIN, MANAGER, STAFF
     branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True) # Atandığı Mağaza/Şube
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True, default=1) # Ait olduğu Firma (Tenant)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -503,3 +504,101 @@ class DailyReport(Base):
     sales_summary_json = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+# =========================================================================
+# MULTI-TENANT SAAS, LİSANS, FİRMA YÖNETİMİ & BULUT MALİYET MODELLERİ
+# =========================================================================
+
+class TenantCompany(Base):
+    """SaaS Abonesi Müşteri Firma (Kuyumcu Mağazası / Şirketi)"""
+    __tablename__ = "tenant_companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_code = Column(String(30), unique=True, index=True, nullable=False) # örn: GG-TEN-101
+    company_name = Column(String(150), nullable=False) # Altınbaşak Kuyumculuk Ltd.
+    owner_name = Column(String(100), nullable=False) # Şirket Sahibi / Yetkili
+    contact_phone = Column(String(30), nullable=False)
+    contact_email = Column(String(100), nullable=False)
+    city = Column(String(50), default="İstanbul")
+    tax_id = Column(String(50), nullable=True) # Vergi No / Dairesi
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    license = relationship("TenantLicense", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
+    backups = relationship("TenantBackupLog", back_populates="tenant", cascade="all, delete-orphan")
+    usage_metrics = relationship("TenantUsageMetric", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
+
+
+class TenantLicense(Base):
+    """Firma Lisanslama, Paket Türü, Faturalandırma & Kullanıcı Sınırlandırma Kotaları"""
+    __tablename__ = "tenant_licenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), unique=True, nullable=False)
+    license_key = Column(String(100), unique=True, index=True, nullable=False) # GG-LIC-2026-X94B-K82M
+    
+    plan_type = Column(String(30), default="YEARLY") # MONTHLY, YEARLY, TRIAL, ENTERPRISE
+    billing_cycle = Column(String(20), default="YEARLY") # MONTHLY, YEARLY
+    subscription_fee = Column(Float, default=48000.0) # Satış bedeli
+    currency = Column(String(10), default="TRY")
+    
+    status = Column(String(20), default="ACTIVE") # ACTIVE, EXPIRED, SUSPENDED, TRIAL
+    start_date = Column(DateTime, default=datetime.datetime.utcnow)
+    end_date = Column(DateTime, nullable=False)
+    auto_renew = Column(Boolean, default=True)
+    
+    # KULLANICI & SİSTEM KOTA SINIRLANDIRMALARI (LİMİTLER)
+    max_admin_count = Column(Integer, default=2) # Maksimum Admin/Yönetici sayısı
+    max_staff_count = Column(Integer, default=5) # Maksimum Personel/Kasiyer sayısı
+    max_branches_count = Column(Integer, default=2) # Maksimum Şube sayısı
+    max_showcase_slots = Column(Integer, default=100) # Maksimum Vitrin Akıllı Askı sayısı
+    storage_limit_mb = Column(Integer, default=5000) # Maksimum depolama kotası (MB)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    tenant = relationship("TenantCompany", back_populates="license")
+
+
+class TenantBackupLog(Base):
+    """Otomatik Gece & İsteğe Bağlı Veritabanı Yedekleme Kayıtları"""
+    __tablename__ = "tenant_backup_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True)
+    backup_type = Column(String(30), default="NIGHTLY_AUTOMATIC") # NIGHTLY_AUTOMATIC, ON_DEMAND
+    file_name = Column(String(150), nullable=False)
+    file_size_bytes = Column(Integer, default=0)
+    file_size_mb = Column(Float, default=0.0)
+    file_path = Column(String(255), nullable=False)
+    checksum = Column(String(64), nullable=True)
+    status = Column(String(20), default="COMPLETED") # COMPLETED, FAILED, IN_PROGRESS
+    notes = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+    tenant = relationship("TenantCompany", back_populates="backups")
+
+
+class TenantUsageMetric(Base):
+    """Sistem Yükü, Anlık Online Kullanıcı & Tahmini AWS Bulut Maliyet Hesaplayıcısı"""
+    __tablename__ = "tenant_usage_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), unique=True, nullable=False)
+    
+    active_online_users = Column(Integer, default=1) # Anlık aktif canlı kullanıcı sayısı
+    daily_api_requests = Column(Integer, default=0) # Günlük API istek sayısı
+    total_db_records = Column(Integer, default=0) # Toplam ürün + satış + log satırı
+    storage_used_mb = Column(Float, default=15.0) # Kullanılan disk alanı (MB)
+    
+    # BULUT SUNUCU MALİYET HESAPLAMALARI (AWS Lightsail/EC2 + EBS + Traffic)
+    estimated_server_cost_usd = Column(Float, default=4.50) # Firma başı tahmini aylık bulut maliyeti ($)
+    estimated_server_cost_try = Column(Float, default=185.0) # Firma başı tahmini aylık bulut maliyeti (₺)
+    net_saas_profit_try = Column(Float, default=3815.0) # Lisans Geliri - Sunucu Maliyeti (Net Kâr ₺)
+    profit_margin_percent = Column(Float, default=95.3) # SaaS Brüt Kâr Marjı (%)
+    
+    last_ping_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    tenant = relationship("TenantCompany", back_populates="usage_metrics")

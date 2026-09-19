@@ -10,7 +10,8 @@ import asyncio
 from .database import engine, Base, SessionLocal
 from . import models, iot_service, auth
 from .iot_watchdog import run_iot_watchdog
-from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases
+from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases, tenants
+from . import backup_service
 
 from sqlalchemy import text
 
@@ -20,7 +21,8 @@ def run_sqlite_migrations():
             "ALTER TABLE branches ADD COLUMN branch_code VARCHAR(30) DEFAULT 'BR-01'",
             "ALTER TABLE branches ADD COLUMN region VARCHAR(50) DEFAULT 'Marmara'",
             "ALTER TABLE rack_slots ADD COLUMN location_code VARCHAR(50)",
-            "ALTER TABLE rack_slots ADD COLUMN is_active BOOLEAN DEFAULT 1"
+            "ALTER TABLE rack_slots ADD COLUMN is_active BOOLEAN DEFAULT 1",
+            "ALTER TABLE users ADD COLUMN tenant_id INTEGER DEFAULT 1"
         ]:
             try:
                 conn.execute(text(alter_stmt))
@@ -34,6 +36,58 @@ Base.metadata.create_all(bind=engine)
 def seed_initial_data():
     db = SessionLocal()
     try:
+        # -1. İlk Tenant (Firma), Lisans ve Metrikleri kontrol et
+        if db.query(models.TenantCompany).count() == 0:
+            first_tenant = models.TenantCompany(
+                id=1,
+                company_code="GG-TEN-101",
+                company_name="Golden Guard Sarrafiye & Mücevherat A.Ş.",
+                owner_name="Erdem Sarraf",
+                contact_phone="0212 522 10 20",
+                contact_email="erdem@goldenguard.uk",
+                city="İstanbul",
+                tax_id="4820194821",
+                is_active=True,
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(first_tenant)
+            db.flush()
+
+            first_license = models.TenantLicense(
+                tenant_id=first_tenant.id,
+                license_key="GG-LIC-2026-HQ88-V99P",
+                plan_type="YEARLY",
+                billing_cycle="YEARLY",
+                subscription_fee=72000.0,
+                currency="TRY",
+                status="ACTIVE",
+                start_date=datetime.datetime.utcnow(),
+                end_date=datetime.datetime.utcnow() + datetime.timedelta(days=365),
+                auto_renew=True,
+                max_admin_count=5,
+                max_staff_count=20,
+                max_branches_count=5,
+                max_showcase_slots=250,
+                storage_limit_mb=10000,
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(first_license)
+
+            first_metric = models.TenantUsageMetric(
+                tenant_id=first_tenant.id,
+                active_online_users=3,
+                daily_api_requests=145,
+                total_db_records=85,
+                storage_used_mb=28.4,
+                estimated_server_cost_usd=6.50,
+                estimated_server_cost_try=269.75,
+                net_saas_profit_try=5730.25,
+                profit_margin_percent=95.5,
+                last_ping_at=datetime.datetime.utcnow()
+            )
+            db.add(first_metric)
+            db.commit()
+
         # 0. Şubeleri kontrol et ve oluştur
         if db.query(models.Branch).count() == 0:
             b1 = models.Branch(id=1, name="Kapalıçarşı Merkez Mağaza", city="İstanbul", address="Kapalıçarşı Kalpakçılar Cad. No:42, Fatih", phone="0212 522 10 20")
@@ -624,6 +678,10 @@ app.include_router(legal.router)
 app.include_router(branches.router)
 app.include_router(rates.router)
 app.include_router(purchases.router)
+app.include_router(tenants.router)
+
+# Otomatik Gece 03:00 Yedekleme Zamanlayıcısını Başlat
+backup_service.run_nightly_backup_scheduler()
 
 @app.get("/")
 def health_check():

@@ -89,12 +89,38 @@ def create_staff_user(
         target_branch_id = current_user.branch_id
         target_role = "STAFF"
 
+    # LİSANS KOTA & KULLANICI SINIRLANDIRMA DENETİMİ
+    tenant_id = getattr(current_user, 'tenant_id', None) or 1
+    license_obj = db.query(models.TenantLicense).filter(models.TenantLicense.tenant_id == tenant_id).first()
+    if license_obj:
+        if target_role in ["ADMIN", "MANAGER"]:
+            current_admin_count = db.query(models.User).filter(
+                (models.User.tenant_id == tenant_id) & 
+                (models.User.role.in_(["ADMIN", "MANAGER"]))
+            ).count()
+            if current_admin_count >= license_obj.max_admin_count:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Firma lisans sınırınız doldu: Paketiniz maksimum {license_obj.max_admin_count} Yönetici (Admin/Müdür) ile sınırlandırılmıştır. Limit artırımı için Master HQ lisans yöneticiniz ile iletişime geçiniz."
+                )
+        else:
+            current_staff_count = db.query(models.User).filter(
+                (models.User.tenant_id == tenant_id) & 
+                (models.User.role == "STAFF")
+            ).count()
+            if current_staff_count >= license_obj.max_staff_count:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Firma lisans sınırınız doldu: Paketiniz maksimum {license_obj.max_staff_count} Satış Personeli / Kasiyer ile sınırlandırılmıştır. Limit artırımı için Master HQ lisans yöneticiniz ile iletişime geçiniz."
+                )
+
     new_user = models.User(
         username=user_in.username,
         password_hash=auth.hash_password(user_in.password),
         full_name=user_in.full_name,
         role=target_role,
         branch_id=target_branch_id,
+        tenant_id=tenant_id,
         is_active=True
     )
     db.add(new_user)
