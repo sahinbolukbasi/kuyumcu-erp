@@ -2941,16 +2941,19 @@ export default function Home() {
               </button>
             )}
 
-            {/* HIZLI KASA / POS BUTONU */}
+            {/* HIZLI KASA / SATIŞ BUTONU (HARİCİ POS / MANUEL) */}
             <button
               onClick={() => {
-                if (activeTab !== 'sales') setActiveTab('sales');
-                setShowDirectSaleModal(true);
+                const availableProduct = products.find(p => p.status !== 'Satıldı') || products[0];
+                if (availableProduct) {
+                  setSelectedProductForSale(availableProduct);
+                }
+                setShowSaleModal(true);
               }}
               className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 hover:brightness-110 text-slate-950 font-bold text-xs shadow-md transition flex items-center gap-1.5 active:scale-95"
             >
               <ShoppingCart className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Hızlı POS Satış</span>
+              <span className="hidden sm:inline">Hızlı Satış Yap</span>
             </button>
 
             {/* SİREN SUSTUR / TEST */}
@@ -3013,14 +3016,6 @@ export default function Home() {
               >
                 <span>🔍</span>
                 <span>#{alerts[0].slot_id} Ürünü Eşle</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowResetLossModal(alerts[0])}
-                className="bg-gradient-to-r from-rose-900 to-red-950 hover:from-rose-800 hover:to-red-900 text-rose-100 border border-rose-400/80 text-xs font-black py-1.5 px-3 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
-              >
-                <span>⚠️</span>
-                <span>Sistemi Normale Döndür</span>
               </button>
             </div>
           </div>
@@ -3617,6 +3612,33 @@ export default function Home() {
         {activeTab === 'sales' && (
           <div className="space-y-6">
             
+            {/* HIZLI SATIŞ BAŞLATMA ŞERİDİ (HARİCİ POS / NAKİT) */}
+            <div className="bg-gradient-to-r from-[#141826] via-[#1a2035] to-[#141826] p-4 rounded-xl border border-amber-500/40 shadow-lg flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                  <ShoppingCart className="w-4 h-4 text-amber-400" />
+                  <span>KASA &amp; SATIŞ İŞLEMLERİ (MANUEL / HARİCİ POS)</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Banka POS cihazınızdan tahsilat yapıp veya nakit alıp anında fiş kesebilir, vitrin stoklarından düşüp doğrudan ciroya işleyebilirsiniz.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const availableProduct = products.find(p => p.status !== 'Satıldı') || products[0];
+                  if (availableProduct) {
+                    setSelectedProductForSale(availableProduct);
+                  }
+                  setShowSaleModal(true);
+                }}
+                className="btn-gold py-2.5 px-4 text-xs font-bold flex items-center gap-2 shadow-lg"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Yeni Satış Yap &amp; Fiş Kes</span>
+              </button>
+            </div>
+
             {/* Filtre Barı */}
             <div className="bg-[#12141c] p-4 rounded-xl border border-[#242938] space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -6238,14 +6260,37 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleProcessSale} className="space-y-4 text-xs max-h-[80vh] overflow-y-auto pr-1">
-              <div className="p-3 bg-[#0e1017] rounded-lg border border-[#242938] flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-white text-sm">{selectedProductForSale.name}</div>
-                  <div className="text-amber-400 font-mono mt-0.5">{selectedProductForSale.purity} • {selectedProductForSale.weight_grams} gr</div>
+              <div className="p-3 bg-[#0e1017] rounded-xl border border-[#242938] space-y-2 shadow-inner">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-white text-sm">{selectedProductForSale.name}</div>
+                    <div className="text-amber-400 font-mono mt-0.5">
+                      {selectedProductForSale.purity} • {selectedProductForSale.weight_grams} gr {selectedProductForSale.barcode ? `• #${selectedProductForSale.barcode}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-slate-400 text-[10px]">Satış Tutarı</div>
+                    <div className="text-base font-display font-bold text-white">{selectedProductForSale.price.toLocaleString('tr-TR')} ₺</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-slate-400 text-[10px]">Etiket Fiyatı</div>
-                  <div className="text-base font-display font-bold text-white">{selectedProductForSale.price.toLocaleString('tr-TR')} ₺</div>
+
+                {/* Ürün Değiştirme / Seçme Açılır Kutusu */}
+                <div className="pt-2 border-t border-[#1a1f2e]">
+                  <label className="text-[11px] text-slate-400 block mb-1 font-semibold">Satılacak Mücevheri Değiştir / Seç:</label>
+                  <select
+                    value={selectedProductForSale.id}
+                    onChange={(e) => {
+                      const found = products.find(p => p.id === parseInt(e.target.value));
+                      if (found) setSelectedProductForSale(found);
+                    }}
+                    className="w-full bg-[#12141c] border border-[#2a3144] text-white rounded-lg p-2 text-xs focus:outline-none focus:border-amber-400 font-medium"
+                  >
+                    {products.filter(p => p.status !== 'Satıldı').map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.purity} - {p.weight_grams}g) — {p.price.toLocaleString('tr-TR')} ₺ [{p.status}]
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -6518,16 +6563,16 @@ export default function Home() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ödeme Yöntemi</label>
+                  <label className="block text-slate-300 font-semibold mb-1">Tahsilat / Ödeme Türü</label>
                   <select
                     value={salePaymentMethod}
                     onChange={(e) => setSalePaymentMethod(e.target.value)}
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
+                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none focus:border-amber-400"
                   >
-                    <option value="Kredi Kartı">Kredi Kartı</option>
-                    <option value="Nakit">Nakit (TL)</option>
-                    <option value="Havale/EFT">Havale / EFT</option>
-                    <option value="Altın Takas">Eski Altın Takası</option>
+                    <option value="Kredi Kartı">💳 Kredi Kartı (Harici POS Slipi)</option>
+                    <option value="Nakit">💵 Nakit (Elden Tahsilat)</option>
+                    <option value="Havale/EFT">🏦 Banka Havalesi / FAST</option>
+                    <option value="Altın Takas">🪙 Hurda / Ziynet Altın Takası</option>
                   </select>
                 </div>
                 <div>
@@ -6632,8 +6677,16 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Harici POS / Tahsilat Bilgilendirmesi */}
+              <div className="p-3 bg-emerald-950/40 rounded-xl border border-emerald-500/40 text-xs text-emerald-300 flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <div className="text-[11px] leading-relaxed">
+                  <strong>Harici Tahsilat Modu (Banka POS Entegrasyonu Gerekmez):</strong> Tahsilatı dükkandaki posunuzdan veya nakit olarak aldıktan sonra işlemi onaylayabilirsiniz. Satış doğrudan sisteme düşer, askı stoğundan eksilir ve kasa cironuza eklenir.
+                </div>
+              </div>
+
               <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center justify-between">
-                <span className="font-semibold text-amber-300">Ödenecek Tutar:</span>
+                <span className="font-semibold text-amber-300">Ödenecek Net Tutar:</span>
                 <span className="text-base font-bold font-display text-white">
                   {Math.max(0, selectedProductForSale.price - (parseFloat(saleDiscount) || 0)).toLocaleString('tr-TR')} ₺
                 </span>
@@ -6642,9 +6695,10 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={(selectedProductForSale.price - (parseFloat(saleDiscount) || 0)) >= 100000 && !twoManApproved}
-                className="btn-gold w-full py-2.5 justify-center font-bold text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-gold w-full py-3 justify-center font-bold text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl flex items-center gap-2"
               >
-                Satışı Onayla & Askıdan Düş
+                <ShoppingCart className="w-4 h-4" />
+                <span>Satışı Tamamla &amp; Sisteme İşle</span>
               </button>
             </form>
           </div>
