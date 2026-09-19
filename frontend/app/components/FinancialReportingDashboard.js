@@ -1,0 +1,590 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { 
+  BarChart3, 
+  TrendingUp, 
+  DollarSign, 
+  Coins, 
+  ShoppingBag, 
+  Calendar, 
+  FileText, 
+  Printer, 
+  Download, 
+  Search, 
+  Filter, 
+  CheckCircle2, 
+  Award, 
+  Users, 
+  Clock, 
+  Save, 
+  Percent,
+  PieChart,
+  ArrowUpRight,
+  Sparkles
+} from 'lucide-react';
+
+export default function FinancialReportingDashboard({
+  salesList = [],
+  analytics = {},
+  dailyReportsArchive = [],
+  currentUser,
+  onSaveDailyReport,
+  onPrintReport,
+  onFastSelectSaleForEmail
+}) {
+  // Seçili Dönem Filtresi: 'TODAY' (Gün Sonu) | 'WEEK' (Haftalık) | 'MONTH' (Aylık) | 'YEAR' (Yıllık) | 'ALL' (Tümü)
+  const [timeframe, setTimeframe] = useState('TODAY');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [savingReport, setSavingReport] = useState(false);
+
+  // Tarih Filtreleme Mantığı
+  const filteredSales = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfToday.getDate() - 7);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    return salesList.filter(s => {
+      const saleDate = s.created_at ? new Date(s.created_at) : new Date();
+
+      // Zaman Filtresi
+      if (timeframe === 'TODAY' && saleDate < startOfToday) return false;
+      if (timeframe === 'WEEK' && saleDate < startOfWeek) return false;
+      if (timeframe === 'MONTH' && saleDate < startOfMonth) return false;
+      if (timeframe === 'YEAR' && saleDate < startOfYear) return false;
+
+      // Kategori Filtresi
+      if (categoryFilter !== 'ALL' && s.category !== categoryFilter) return false;
+
+      // Arama
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchName = (s.product_name || '').toLowerCase().includes(q);
+        const matchCust = (s.customer_name || '').toLowerCase().includes(q);
+        const matchStaff = (s.sold_by_name || '').toLowerCase().includes(q);
+        const matchInv = (s.invoice_no || '').toLowerCase().includes(q);
+        if (!matchName && !matchCust && !matchStaff && !matchInv) return false;
+      }
+
+      return true;
+    });
+  }, [salesList, timeframe, categoryFilter, searchQuery]);
+
+  // Finansal KPI Özetleri
+  const summary = useMemo(() => {
+    let totalRevenue = 0;
+    let totalCost = 0;
+    let totalGrams = 0;
+    const catMap = {};
+    const paymentMap = {};
+    const staffMap = {};
+
+    filteredSales.forEach(s => {
+      const price = parseFloat(s.sale_price) || 0;
+      const cost = parseFloat(s.cost_price) || (price * 0.82);
+      const grams = parseFloat(s.weight_grams) || 0;
+
+      totalRevenue += price;
+      totalCost += cost;
+      totalGrams += grams;
+
+      // Kategori Dağılımı
+      const cat = s.category || 'Diğer';
+      catMap[cat] = (catMap[cat] || 0) + price;
+
+      // Ödeme Yöntemi
+      const pay = s.payment_method || 'Kredi Kartı';
+      paymentMap[pay] = (paymentMap[pay] || 0) + price;
+
+      // Personel Satışları
+      const staff = s.sold_by_name || 'Yetkili Personel';
+      if (!staffMap[staff]) {
+        staffMap[staff] = { count: 0, revenue: 0, grams: 0 };
+      }
+      staffMap[staff].count += 1;
+      staffMap[staff].revenue += price;
+      staffMap[staff].grams += grams;
+    });
+
+    const netProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0;
+
+    return {
+      count: filteredSales.length,
+      totalRevenue,
+      totalCost,
+      netProfit,
+      profitMargin,
+      totalGrams,
+      catMap,
+      paymentMap,
+      staffMap
+    };
+  }, [filteredSales]);
+
+  // Zaman başlığı etiketi
+  const timeframeLabels = {
+    TODAY: 'Bugün (Gün Sonu)',
+    WEEK: 'Bu Hafta (Haftalık)',
+    MONTH: 'Bu Ay (Aylık)',
+    YEAR: 'Bu Yıl (Yıllık)',
+    ALL: 'Tüm Zamanlar (Genel)'
+  };
+
+  const handleSaveClick = async () => {
+    setSavingReport(true);
+    try {
+      await onSaveDailyReport({
+        report_date: new Date().toISOString().split('T')[0],
+        total_revenue: summary.totalRevenue,
+        total_gold_grams_sold: summary.totalGrams,
+        total_sales_count: summary.count,
+        total_cost: summary.totalCost,
+        net_profit: summary.netProfit,
+        notes: `${currentUser?.full_name || 'Yetkili'} tarafından ${timeframeLabels[timeframe]} raporu kalıcı arşive kaydedildi.`
+      });
+    } finally {
+      setSavingReport(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* ÜST BAŞLIK VE DÖNEM SEÇİCİ */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-[#141826] via-[#1a2035] to-[#141826] border border-amber-500/40 shadow-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-cinzel text-lg lg:text-xl font-bold text-white tracking-wide flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-amber-400" />
+              <span>SATIŞ, CİRO &amp; FİNANSAL RAPORLAMA DASHBOARD</span>
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Günlük, haftalık, aylık ve yıllık satış trendleri, kâr marjları ve personel performans analizleri
+          </p>
+        </div>
+
+        {/* DÖNEM SEKMELERİ (GÜN SONU / HAFTALIK / AYLIK / YILLIK) */}
+        <div className="flex items-center gap-1.5 bg-[#0e1017] p-1.5 rounded-xl border border-[#2b334a] overflow-x-auto">
+          <button
+            onClick={() => setTimeframe('TODAY')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              timeframe === 'TODAY'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Bugün (Gün Sonu)</span>
+          </button>
+
+          <button
+            onClick={() => setTimeframe('WEEK')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              timeframe === 'WEEK'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Bu Hafta</span>
+          </button>
+
+          <button
+            onClick={() => setTimeframe('MONTH')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              timeframe === 'MONTH'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Bu Ay</span>
+          </button>
+
+          <button
+            onClick={() => setTimeframe('YEAR')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              timeframe === 'YEAR'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Bu Yıl</span>
+          </button>
+
+          <button
+            onClick={() => setTimeframe('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              timeframe === 'ALL'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span>Tümü</span>
+          </button>
+        </div>
+      </div>
+
+      {/* AKSİYON BUTONLARI: Z-RAPORU KAYDET & YAZDIR */}
+      <div className="flex items-center justify-between flex-wrap gap-3 bg-[#12141c] p-3.5 rounded-xl border border-[#242938]">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-slate-400">Aktif Dönem:</span>
+          <strong className="text-amber-400 font-bold font-mono">{timeframeLabels[timeframe]}</strong>
+          <span className="text-slate-500">({summary.count} İşlem Kayıtlı)</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onPrintReport}
+            className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 border-slate-700 text-slate-300 hover:text-white"
+          >
+            <Printer className="w-3.5 h-3.5 text-amber-400" />
+            <span>Raporu Yazdır / PDF</span>
+          </button>
+
+          <button
+            onClick={handleSaveClick}
+            disabled={savingReport}
+            className="btn-gold text-xs py-1.5 px-3.5 flex items-center gap-1.5 font-bold"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{savingReport ? 'Kaydediliyor...' : '💾 Dönem / Z-Raporunu Kaydet'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 5 TEMEL FİNANSAL KPI KARTI */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {/* Toplam Ciro */}
+        <div className="p-4 rounded-xl bg-gradient-to-br from-[#181c2b] to-[#12141c] border border-amber-500/40 shadow-lg">
+          <div className="text-[10px] font-mono text-slate-400 uppercase flex items-center justify-between">
+            <span>Toplam Ciro</span>
+            <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+          </div>
+          <div className="text-xl font-bold font-display text-white mt-2">
+            {summary.totalRevenue.toLocaleString('tr-TR')} ₺
+          </div>
+          <div className="text-[10px] text-amber-300/80 font-mono mt-0.5">
+            {timeframeLabels[timeframe]}
+          </div>
+        </div>
+
+        {/* Satış Adedi */}
+        <div className="p-4 rounded-xl bg-gradient-to-br from-[#181c2b] to-[#12141c] border border-indigo-500/40 shadow-lg">
+          <div className="text-[10px] font-mono text-slate-400 uppercase flex items-center justify-between">
+            <span>Satış Adedi</span>
+            <ShoppingBag className="w-3.5 h-3.5 text-indigo-400" />
+          </div>
+          <div className="text-xl font-bold font-mono text-white mt-2">
+            {summary.count} Adet
+          </div>
+          <div className="text-[10px] text-indigo-300/80 font-mono mt-0.5">
+            Tamamlanan Fişler
+          </div>
+        </div>
+
+        {/* Satılan Has Gramaj */}
+        <div className="p-4 rounded-xl bg-gradient-to-br from-[#181c2b] to-[#12141c] border border-yellow-500/40 shadow-lg">
+          <div className="text-[10px] font-mono text-slate-400 uppercase flex items-center justify-between">
+            <span>Satılan Altın</span>
+            <Coins className="w-3.5 h-3.5 text-yellow-400" />
+          </div>
+          <div className="text-xl font-bold font-mono text-amber-400 mt-2">
+            {summary.totalGrams.toFixed(2)} gr
+          </div>
+          <div className="text-[10px] text-yellow-300/80 font-mono mt-0.5">
+            Toplam Metal Ağırlığı
+          </div>
+        </div>
+
+        {/* Net Kâr */}
+        <div className="p-4 rounded-xl bg-gradient-to-br from-[#181c2b] to-[#12141c] border border-emerald-500/40 shadow-lg">
+          <div className="text-[10px] font-mono text-slate-400 uppercase flex items-center justify-between">
+            <span>Net Kâr</span>
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="text-xl font-bold font-display text-emerald-400 mt-2">
+            +{summary.netProfit.toLocaleString('tr-TR')} ₺
+          </div>
+          <div className="text-[10px] text-emerald-300/80 font-mono mt-0.5">
+            Maliyet Düşüldükten Sonra
+          </div>
+        </div>
+
+        {/* Kâr Marjı */}
+        <div className="p-4 rounded-xl bg-gradient-to-br from-[#181c2b] to-[#12141c] border border-cyan-500/40 shadow-lg col-span-2 md:col-span-1">
+          <div className="text-[10px] font-mono text-slate-400 uppercase flex items-center justify-between">
+            <span>Kâr Marjı</span>
+            <Percent className="w-3.5 h-3.5 text-cyan-400" />
+          </div>
+          <div className="text-xl font-bold font-mono text-cyan-400 mt-2">
+            %{summary.profitMargin.toFixed(1)}
+          </div>
+          <div className="text-[10px] text-cyan-300/80 font-mono mt-0.5">
+            Ortalama Brüt Verim
+          </div>
+        </div>
+      </div>
+
+      {/* GRAFİK DAĞILIMLARI (KATEGORİLER & ÖDEME YÖNTEMLERİ) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Kategori Dağılımı Bar Grafiği */}
+        <div className="p-5 rounded-2xl bg-[#12141c] border border-[#242938] space-y-3">
+          <div className="flex items-center justify-between border-b border-[#242938] pb-2">
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <PieChart className="w-4 h-4 text-amber-400" />
+              <span>Ürün Kategorisi Ciro Dağılımı</span>
+            </h3>
+            <span className="text-[10px] text-slate-400 font-mono">Tutar ve Oran</span>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            {Object.keys(summary.catMap).length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-xs">Bu dönemde kategori verisi yok.</div>
+            ) : (
+              Object.entries(summary.catMap).map(([cat, amt]) => {
+                const pct = summary.totalRevenue > 0 ? ((amt / summary.totalRevenue) * 100).toFixed(1) : 0;
+                return (
+                  <div key={cat} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-semibold text-slate-200">{cat}</span>
+                      <span className="font-mono text-amber-400 font-bold">
+                        {amt.toLocaleString('tr-TR')} ₺ <span className="text-slate-400 text-[10px]">({pct}%)</span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-[#181c28] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500" 
+                        style={{ width: `${pct}%` }} 
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Ödeme Yöntemleri Dağılımı */}
+        <div className="p-5 rounded-2xl bg-[#12141c] border border-[#242938] space-y-3">
+          <div className="flex items-center justify-between border-b border-[#242938] pb-2">
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <span>Ödeme Kanalları &amp; Kasa Dağılımı</span>
+            </h3>
+            <span className="text-[10px] text-slate-400 font-mono">Nakit / Kart / Havale</span>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            {Object.keys(summary.paymentMap).length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-xs">Bu dönemde ödeme verisi yok.</div>
+            ) : (
+              Object.entries(summary.paymentMap).map(([method, amt]) => {
+                const pct = summary.totalRevenue > 0 ? ((amt / summary.totalRevenue) * 100).toFixed(1) : 0;
+                return (
+                  <div key={method} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-semibold text-slate-200">{method}</span>
+                      <span className="font-mono text-emerald-400 font-bold">
+                        {amt.toLocaleString('tr-TR')} ₺ <span className="text-slate-400 text-[10px]">({pct}%)</span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-[#181c28] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" 
+                        style={{ width: `${pct}%` }} 
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* PERSONEL SATIŞ KARNESİ */}
+      <div className="p-5 rounded-2xl bg-[#12141c] border border-[#242938] space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-amber-400" />
+            <h3 className="font-bold text-sm text-white">DÖNEMLİK PERSONEL PERFORMANS ANALİZİ</h3>
+          </div>
+          <span className="text-[11px] text-slate-400 font-mono">Kim ne sattı karnesi</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-[#181b26] text-slate-400 text-[10px] font-mono uppercase">
+              <tr>
+                <th className="p-2.5">Satış Danışmanı</th>
+                <th className="p-2.5 text-center">Satış Adedi</th>
+                <th className="p-2.5 text-center">Satılan Altın (gr)</th>
+                <th className="p-2.5 text-right">Üretilen Ciro (₺)</th>
+                <th className="p-2.5 text-right">Ciro Payı (%)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#222736]">
+              {Object.keys(summary.staffMap).length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center text-slate-500">Personel satış verisi bulunmuyor.</td>
+                </tr>
+              ) : (
+                Object.entries(summary.staffMap).map(([staff, data]) => {
+                  const share = summary.totalRevenue > 0 ? ((data.revenue / summary.totalRevenue) * 100).toFixed(1) : 0;
+                  return (
+                    <tr key={staff} className="hover:bg-[#161a26] transition">
+                      <td className="p-2.5 font-bold text-white flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-400" />
+                        <span>{staff}</span>
+                      </td>
+                      <td className="p-2.5 text-center font-mono font-bold text-slate-200">{data.count}</td>
+                      <td className="p-2.5 text-center font-mono text-amber-400">{data.grams.toFixed(2)} gr</td>
+                      <td className="p-2.5 text-right font-mono font-bold text-white">{data.revenue.toLocaleString('tr-TR')} ₺</td>
+                      <td className="p-2.5 text-right font-mono text-emerald-400 font-bold">%{share}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* DETAYLI SATIŞ FİŞLERİ TABLOSU */}
+      <div className="p-5 rounded-2xl bg-[#12141c] border border-[#242938] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-amber-400" />
+            <h3 className="font-bold text-sm text-white">DÖNEM İÇİ SATIŞ FİŞLERİ &amp; İŞLEM LİSTESİ</h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Kategori Filtresi */}
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="bg-[#0e1017] border border-[#282f42] rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none"
+            >
+              <option value="ALL">Tüm Kategoriler</option>
+              <option value="Bilezik">Bilezik</option>
+              <option value="Yüzük">Yüzük</option>
+              <option value="Kolye">Kolye</option>
+              <option value="Küpe">Küpe</option>
+              <option value="Set">Set</option>
+              <option value="Külçe / Has">Külçe / Has</option>
+            </select>
+
+            {/* Arama Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Ürün, müşteri veya fiş ara..."
+                className="bg-[#0e1017] border border-[#282f42] rounded-lg pl-8 pr-3 py-1 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-[#181b26] text-slate-400 text-[10px] font-mono uppercase">
+              <tr>
+                <th className="p-2.5">Fiş / Fatura No</th>
+                <th className="p-2.5">Mücevher</th>
+                <th className="p-2.5">Ayar / Gram</th>
+                <th className="p-2.5">Müşteri</th>
+                <th className="p-2.5">Satış Danışmanı</th>
+                <th className="p-2.5">Ödeme</th>
+                <th className="p-2.5 text-right">Tutar (₺)</th>
+                <th className="p-2.5 text-right">İşlem</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#222736]">
+              {filteredSales.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-slate-500">
+                    Seçilen filtre kriterlerine uygun satış bulunamadı.
+                  </td>
+                </tr>
+              ) : (
+                filteredSales.map(s => (
+                  <tr key={s.id} className="hover:bg-[#161a26] transition">
+                    <td className="p-2.5 font-mono text-amber-400 font-bold">{s.invoice_no || `SE-${s.id}`}</td>
+                    <td className="p-2.5 font-bold text-white">{s.product_name}</td>
+                    <td className="p-2.5 font-mono text-slate-300">{s.purity} • {s.weight_grams} gr</td>
+                    <td className="p-2.5 text-slate-200">{s.customer_name || 'Müşteri'}</td>
+                    <td className="p-2.5 text-slate-300">{s.sold_by_name || 'Yetkili Personel'}</td>
+                    <td className="p-2.5 font-mono text-slate-400">{s.payment_method || 'Kredi Kartı'}</td>
+                    <td className="p-2.5 text-right font-display font-bold text-white">
+                      {(parseFloat(s.sale_price) || 0).toLocaleString('tr-TR')} ₺
+                    </td>
+                    <td className="p-2.5 text-right">
+                      <button
+                        onClick={() => onFastSelectSaleForEmail && onFastSelectSaleForEmail(s)}
+                        className="text-[11px] text-amber-400 hover:text-amber-300 underline font-semibold"
+                      >
+                        Sertifika
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* KALICI GÜN SONU / Z-RAPORU ARŞİVİ */}
+      {dailyReportsArchive && dailyReportsArchive.length > 0 && (
+        <div className="p-5 rounded-2xl bg-[#12141c] border border-[#242938] space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-sm text-white flex items-center gap-2">
+              <FileText className="w-4 h-4 text-sky-400" />
+              <span>GEÇMİŞ Z-RAPORLARI &amp; KALICI GÜN SONU ARŞİVİ</span>
+            </h3>
+            <span className="text-[11px] text-slate-400 font-mono">Veritabanında Arşivlenmiş Gün Sonları</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-[#181b26] text-slate-400 text-[10px] font-mono uppercase">
+                <tr>
+                  <th className="p-2.5">Kapanış Tarihi</th>
+                  <th className="p-2.5">Toplam Ciro (₺)</th>
+                  <th className="p-2.5">Satılan Has (gr)</th>
+                  <th className="p-2.5">İşlem Adedi</th>
+                  <th className="p-2.5">Net Kâr (₺)</th>
+                  <th className="p-2.5">Kapatan Yetkili</th>
+                  <th className="p-2.5">Açıklama / Not</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#222736]">
+                {dailyReportsArchive.map(rep => (
+                  <tr key={rep.id} className="hover:bg-[#161a26] transition">
+                    <td className="p-2.5 font-mono text-amber-400 font-bold">{rep.report_date}</td>
+                    <td className="p-2.5 font-bold font-display text-white">{(rep.total_revenue || 0).toLocaleString('tr-TR')} ₺</td>
+                    <td className="p-2.5 font-mono text-slate-300">{(rep.total_gold_grams_sold || 0).toFixed(2)} gr</td>
+                    <td className="p-2.5 font-mono text-center text-slate-200">{rep.total_sales_count || 0}</td>
+                    <td className="p-2.5 font-display font-bold text-emerald-400">+{(rep.net_profit || 0).toLocaleString('tr-TR')} ₺</td>
+                    <td className="p-2.5 text-slate-300">{rep.closed_by_name || 'Yetkili'}</td>
+                    <td className="p-2.5 text-slate-400 text-[11px] max-w-[200px] truncate">{rep.notes || 'Normal Kapanış'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -80,6 +80,8 @@ import AddProductLuxuryModal from './components/AddProductLuxuryModal';
 import CriticalAlarmResetModal from './components/CriticalAlarmResetModal';
 import GoldCurrencyCalculator from './components/GoldCurrencyCalculator';
 import PatronAnalyticsDashboard from './components/PatronAnalyticsDashboard';
+import MultiAlarmManager from './components/MultiAlarmManager';
+import FinancialReportingDashboard from './components/FinancialReportingDashboard';
 
 let API_BASE = 'http://127.0.0.1:8000';
 let WS_URL = 'ws://127.0.0.1:8000/ws/live';
@@ -723,21 +725,21 @@ export default function Home() {
     } catch (e) { console.error("Daily reports archive fetch error", e); }
   };
 
-  const handleSaveDailyReport = async () => {
+  const handleSaveDailyReport = async (customData = null) => {
     if (!token) return;
-    if (!window.confirm("Bugünün Gün Sonu Kasa Raporunu sisteme kalıcı olarak kaydetmek ve resmi Z-Raporu arşivine eklemek istiyor musunuz?")) return;
+    if (!window.confirm("Bu dönemin Finansal Satış / Z-Raporunu sisteme kalıcı olarak kaydetmek ve resmi arşive eklemek istiyor musunuz?")) return;
     try {
       const payload = {
-        report_date: new Date().toISOString().split('T')[0],
+        report_date: customData?.report_date || new Date().toISOString().split('T')[0],
         branch_id: currentUser?.branch_id || null,
         branch_name: branchOverview?.branch_name || "Tüm Şirket Konsolide",
-        total_revenue: analytics?.total_sales_revenue || 0,
-        total_gold_grams_sold: analytics?.total_gold_grams_sold || 0,
-        total_sales_count: analytics?.total_sales_count || 0,
-        total_cost: profitMarginData?.total_cost || 0,
-        net_profit: profitMarginData?.net_profit || 0,
+        total_revenue: customData?.total_revenue ?? (analytics?.total_sales_revenue || 0),
+        total_gold_grams_sold: customData?.total_gold_grams_sold ?? (analytics?.total_gold_grams_sold || 0),
+        total_sales_count: customData?.total_sales_count ?? (analytics?.total_sales_count || 0),
+        total_cost: customData?.total_cost ?? (profitMarginData?.total_cost || 0),
+        net_profit: customData?.net_profit ?? (profitMarginData?.net_profit || 0),
         sales_summary_json: JSON.stringify(salesList.slice(0, 30)),
-        notes: `${currentUser?.full_name} tarafından gün sonu kasa devri tamamlandı.`
+        notes: customData?.notes || `${currentUser?.full_name || 'Yetkili'} tarafından dönem raporu arşive kaydedildi.`
       };
       const res = await fetch(`${API_BASE}/api/v1/sales/daily-reports`, {
         method: 'POST',
@@ -748,7 +750,7 @@ export default function Home() {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        alert("✅ Gün Sonu Kasa Raporu başarıyla veritabanına kaydedildi ve arşive eklendi!");
+        alert("✅ Finansal Rapor başarıyla veritabanına kaydedildi ve arşive eklendi!");
         fetchDailyReportsArchive();
         fetchSystemLogs();
       } else {
@@ -1213,7 +1215,7 @@ export default function Home() {
 
     const ratesInterval = setInterval(() => {
       fetchLiveRates();
-    }, 30000);
+    }, 8000);
 
     return () => clearInterval(ratesInterval);
   }, [selectedGroupFilter, selectedTypeFilter]);
@@ -1859,7 +1861,7 @@ export default function Home() {
     try {
       const payload = {
         ...newStaff,
-        branch_id: newStaff.branch_id ? parseInt(newStaff.branch_id) : (currentUser.role === 'MANAGER' ? currentUser.branch_id : null)
+        branch_id: newStaff.branch_id ? parseInt(newStaff.branch_id) : (currentUser?.role === 'MANAGER' ? currentUser?.branch_id : null)
       };
       const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
         method: 'POST',
@@ -2496,6 +2498,32 @@ export default function Home() {
               )}
             </button>
 
+            {/* ALARM & GÜVENLİK MERKEZİ (ÇOKLU ALARM YÖNETİMİ) */}
+            <button
+              onClick={() => { setActiveTab('alarms'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
+                activeTab === 'alarms'
+                  ? 'bg-rose-950/60 text-rose-200 border-rose-500 font-bold shadow-md'
+                  : alerts.length > 0
+                  ? 'bg-rose-950/20 text-rose-300 border-rose-500/40 hover:bg-rose-900/30'
+                  : 'border-transparent text-slate-300 hover:bg-[#191c26] hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className={`w-4 h-4 ${alerts.length > 0 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`} />
+                <span>Alarm &amp; Güvenlik Merkezi</span>
+              </div>
+              {alerts.length > 0 ? (
+                <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-mono font-bold animate-pulse">
+                  {alerts.length} ALARM
+                </span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/40 text-emerald-400 font-mono">
+                  ✓ Güvende
+                </span>
+              )}
+            </button>
+
             {/* 2. MASAMDAKİ ÜRÜNLER (ZİMMET) */}
             <button
               onClick={() => { setActiveTab('custody'); setIsMobileMenuOpen(false); }}
@@ -2690,7 +2718,7 @@ export default function Home() {
               </button>
             )}
 
-            {/* GÜN SONU KASA (PDF) (ADMİN & MÜDÜR) */}
+            {/* FİNANS & SATIŞ RAPORLARI DASHBOARD (GÜNLÜK / HAFTALIK / AYLIK / YILLIK) */}
             {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
               <button
                 onClick={() => { setActiveTab('daily_report'); setIsMobileMenuOpen(false); }}
@@ -2701,10 +2729,10 @@ export default function Home() {
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <FileText className="w-4 h-4 text-sky-400" />
-                  <span>Gün Sonu Kasa Raporu</span>
+                  <BarChart3 className="w-4 h-4 text-sky-400" />
+                  <span>Finans &amp; Satış Raporları</span>
                 </div>
-                <span className="text-[9px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">PDF</span>
+                <span className="text-[9px] font-mono bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-bold">Dashboard</span>
               </button>
             )}
 
@@ -2851,16 +2879,17 @@ export default function Home() {
               </span>
               <h1 className="text-base lg:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 {activeTab === 'vitrin' && 'Canlı Vitrin & Askı Güvenliği'}
+                {activeTab === 'alarms' && '🚨 Vitrin Güvenlik & Çoklu Alarm Yönetim Merkezi'}
                 {activeTab === 'custody' && 'Masamdaki Ürünler (Zimmet)'}
                 {activeTab === 'sales' && (currentUser?.role === 'STAFF' ? 'Satışlarım & Fişler' : 'Kasa & Hızlı POS Satış')}
-                {activeTab === 'calculator' && 'Canlı Altın & Döviz Hesaplama Portalı'}
-                {activeTab === 'patron_dashboard' && 'Patron & Yönetici Bilgi Ekranı (Performans & Denetim)'}
+                {activeTab === 'calculator' && '🧮 Canlı Altın & Döviz Hesaplama Portalı'}
+                {activeTab === 'patron_dashboard' && '👑 Patron & Yönetici Bilgi Ekranı (Performans & Denetim)'}
                 {activeTab === 'stock_locations' && 'Stok & Fiziksel Konum Takibi (Kasa / Tabla / Askı)'}
                 {activeTab === 'crm' && 'Müşteri CRM, Kapora & Sertifika'}
                 {activeTab === 'staff_roles' && 'Personel & Mağaza Yetkileri (RBAC)'}
                 {activeTab === 'staff_team' && 'Mağaza Ekibim'}
                 {activeTab === 'sessions_analytics' && 'Hizmet Seans Analizi & Eksik Modeller'}
-                {activeTab === 'daily_report' && 'Gün Sonu Kasa Raporu (PDF)'}
+                {activeTab === 'daily_report' && '📊 Satış, Ciro & Finansal Raporlama Dashboard'}
                 {activeTab === 'capital_inventory' && 'Has Altın & Sermaye Raporu'}
                 {activeTab === 'security_center' && 'Güvenlik & Sahte Altın'}
                 {activeTab === 'tv_board' && 'Canlı Kur TV Panosu'}
@@ -2955,24 +2984,39 @@ export default function Home() {
           <div className="no-print alert-banner-blink px-5 py-2.5 text-white flex items-center justify-between shadow-xl z-30">
             <div className="flex items-center gap-3">
               <ShieldAlert className="w-5 h-5 text-white animate-bounce shrink-0" />
-              <div className="text-xs font-bold">
-                DİKKAT: {alerts.length} ADET İZİNSİZ VİTRİN HAREKETİ / AĞIRLIK EKSİLMESİ ALGILANDI!
+              <div>
+                <div className="text-xs font-bold">
+                  DİKKAT: {alerts.length} ADET İZİNSİZ VİTRİN HAREKETİ / AĞIRLIK EKSİLMESİ ALGILANDI!
+                </div>
+                <div className="text-[10px] text-rose-100 font-mono">
+                  Toplam Eksilen: {(alerts.reduce((acc, a) => acc + (parseFloat(a.weight_lost) || 0), 0)).toFixed(2)} gr
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => handleTriggerIdentifyLift(alerts[0].slot_id, alerts[0].weight_lost)}
-                className="bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-black py-1.5 px-3.5 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
+                type="button"
+                onClick={() => setActiveTab('alarms')}
+                className="bg-white hover:bg-slate-100 text-slate-950 text-xs font-black py-1.5 px-3 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95 border border-white"
               >
-                <span>🔍</span>
-                <span>#{alerts[0].slot_id} Ürünü Eşle &amp; Masama Al</span>
+                <span>🚨</span>
+                <span>Alarmları Yönet ({alerts.length})</span>
               </button>
               <button
+                type="button"
+                onClick={() => handleTriggerIdentifyLift(alerts[0].slot_id, alerts[0].weight_lost)}
+                className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black py-1.5 px-3 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
+              >
+                <span>🔍</span>
+                <span>#{alerts[0].slot_id} Ürünü Eşle</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowResetLossModal(alerts[0])}
-                className="bg-gradient-to-r from-rose-900 to-red-950 hover:from-rose-800 hover:to-red-900 text-rose-100 border border-rose-400/80 text-xs font-black py-1.5 px-3.5 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
+                className="bg-gradient-to-r from-rose-900 to-red-950 hover:from-rose-800 hover:to-red-900 text-rose-100 border border-rose-400/80 text-xs font-black py-1.5 px-3 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
               >
                 <span>⚠️</span>
-                <span>Hatayı Kapat &amp; Vitrini Sıfırla (Kayıp Kaydı)</span>
+                <span>Sistemi Normale Döndür</span>
               </button>
             </div>
           </div>
@@ -2980,6 +3024,25 @@ export default function Home() {
 
         {/* 4. ANA İÇERİK ALANI */}
         <main className="flex-1 p-4 lg:p-6 w-full max-w-[1600px] mx-auto">
+
+        {/* ================= SEKME: ALARM & GÜVENLİK MERKEZİ (ÇOKLU ALARM YÖNETİMİ) ================= */}
+        {activeTab === 'alarms' && (
+          <MultiAlarmManager
+            alerts={alerts}
+            slots={slots}
+            currentUser={currentUser}
+            onIdentifyLift={(slotId, weight) => handleTriggerIdentifyLift(slotId, weight)}
+            onOpenResetModal={(alert) => setShowResetLossModal(alert)}
+            onRefreshSlots={fetchSlots}
+            onBatchResetAll={() => {
+              if (alerts && alerts.length > 0) {
+                setShowResetLossModal(alerts[0]);
+              } else {
+                alert("Şu anda sıfırlanacak aktif bir alarm bulunmamaktadır.");
+              }
+            }}
+          />
+        )}
 
         {/* ================= SEKME 1: VİTRİN & ÇOKLU ASKI YÖNETİMİ ================= */}
         {activeTab === 'vitrin' && (
@@ -3934,184 +3997,20 @@ export default function Home() {
           </div>
         )}
 
-        {/* ================= SEKME 5: GÜN SONU KASA (PDF RAPOR) ================= */}
+        {/* ================= SEKME: FİNANS, SATIŞ & DÖNEM RAPORLARI (DASHBOARD) ================= */}
         {activeTab === 'daily_report' && (
-          <div className="space-y-6">
-            <div className="no-print flex items-center justify-between bg-[#12141c] p-4 rounded-xl border border-[#242938]">
-              <div>
-                <h2 className="font-cinzel text-lg font-bold text-white">GÜN SONU KASA & MAĞAZA RAPORU</h2>
-                <p className="text-xs text-slate-400">Resmi onaylı, kaşeli A4 formatında döküm alın ve PDF olarak kaydedin.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveDailyReport}
-                  className="btn-gold py-2 px-4 text-xs font-bold shadow flex items-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>💾 Günü Kapat &amp; Sisteme Kaydet</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePrintReport}
-                  className="btn-secondary py-2 px-4 text-xs flex items-center gap-1.5 border-amber-500/40 text-amber-300"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>📄 Resmi A4 Yazdır / PDF</span>
-                </button>
-              </div>
-            </div>
-
-            <div id="printable-report" className="luxury-card p-6 border-amber-500/30 space-y-6">
-              <div className="flex items-center justify-between border-b pb-4 border-[#242938]">
-                <div className="flex items-center gap-3">
-                  <img src={LOGO_URL} alt="Logo" className="w-12 h-12 object-contain" />
-                  <div>
-                    <h1 className="font-cinzel text-xl font-bold tracking-wider gold-gradient-text">GOLDEN GUARD MÜCEVHERAT</h1>
-                    <p className="text-xs text-slate-400">Kapalıçarşı No: 42 Fatih / İstanbul • Tel: (0212) 522 00 00</p>
-                  </div>
-                </div>
-                <div className="text-right text-xs">
-                  <div className="font-mono font-bold text-amber-400">GÜN SONU RAPORU</div>
-                  <div className="text-slate-400 font-mono">Tarih: {new Date().toLocaleDateString('tr-TR')}</div>
-                  <div className="text-slate-500 font-mono">Raporlayan: {currentUser.full_name}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-[#191c26] p-3 rounded-lg border border-[#242938]">
-                  <div className="text-[10px] text-slate-400 uppercase">Toplam Ciro</div>
-                  <div className="text-lg font-bold font-display text-white mt-1">
-                    {(analytics?.total_sales_revenue || 0).toLocaleString('tr-TR')} ₺
-                  </div>
-                </div>
-                <div className="bg-[#191c26] p-3 rounded-lg border border-[#242938]">
-                  <div className="text-[10px] text-slate-400 uppercase">Satılan Altın</div>
-                  <div className="text-lg font-bold font-mono text-amber-400 mt-1">
-                    {(analytics?.total_gold_grams_sold || 0).toFixed(2)} gr
-                  </div>
-                </div>
-                <div className="bg-[#191c26] p-3 rounded-lg border border-[#242938]">
-                  <div className="text-[10px] text-slate-400 uppercase">Satış Adedi</div>
-                  <div className="text-lg font-bold font-mono text-white mt-1">
-                    {analytics?.total_sales_count || 0} Adet
-                  </div>
-                </div>
-                <div className="bg-[#191c26] p-3 rounded-lg border border-[#242938]">
-                  <div className="text-[10px] text-slate-400 uppercase">Vitrindeki Ürün</div>
-                  <div className="text-lg font-bold font-mono text-emerald-400 mt-1">
-                    {analytics?.total_products_in_showcase || 0} Adet
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-cinzel text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-                  Satışı Yapılan Ürünler Listesi
-                </h3>
-                <table className="w-full text-xs text-left border border-[#242938]">
-                  <thead className="bg-[#191c26] text-slate-400 text-[10px] font-mono">
-                    <tr>
-                      <th className="p-2 border-b border-[#242938]">Fiş No</th>
-                      <th className="p-2 border-b border-[#242938]">Ürün Adı</th>
-                      <th className="p-2 border-b border-[#242938]">Ayar / Gram</th>
-                      <th className="p-2 border-b border-[#242938]">Müşteri</th>
-                      <th className="p-2 border-b border-[#242938]">Personel</th>
-                      <th className="p-2 border-b border-[#242938] text-right">Tutar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#242938]">
-                    {salesList.map(s => (
-                      <tr key={s.id}>
-                        <td className="p-2 font-mono text-amber-400">{s.invoice_no || `SE-${s.id}`}</td>
-                        <td className="p-2 font-bold text-white">{s.product_name}</td>
-                        <td className="p-2 font-mono text-slate-300">{s.purity} • {s.weight_grams} gr</td>
-                        <td className="p-2 text-slate-300">{s.customer_name}</td>
-                        <td className="p-2 text-slate-300">{s.sold_by_name}</td>
-                        <td className="p-2 text-right font-display font-bold text-white">{s.sale_price.toLocaleString('tr-TR')} ₺</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="pt-8 grid grid-cols-2 gap-8 text-center text-xs text-slate-400">
-                <div className="border-t border-dashed border-[#242938] pt-2">
-                  <div>Teslim Eden (Satış Danışmanı)</div>
-                  <div className="font-bold text-white mt-1">{currentUser.full_name}</div>
-                </div>
-                <div className="border-t border-dashed border-[#242938] pt-2">
-                  <div>Teslim Alan (Mağaza Müdürü)</div>
-                  <div className="font-bold text-white mt-1">Erdem Sarraf</div>
-                </div>
-              </div>
-            </div>
-
-            {/* GEÇMİŞ GÜN SONU RAPORLARI ARŞİVİ */}
-            <div className="luxury-card p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-[#242938] pb-3">
-                <div className="flex items-center gap-2">
-                  <History className="w-5 h-5 text-amber-400" />
-                  <div>
-                    <h3 className="font-cinzel text-sm font-bold text-white">
-                      GEÇMİŞ GÜN SONU KASA RAPORLARI (Z-RAPORU ARŞİVİ)
-                    </h3>
-                    <p className="text-[11px] text-slate-400">
-                      Veritabanında kalıcı saklanan geçmiş kapanış raporları ve cirolar
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={fetchDailyReportsArchive}
-                  className="btn-secondary text-xs py-1 px-3"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Yenile</span>
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-[#181b26] text-slate-400 uppercase text-[10px] font-mono">
-                    <tr>
-                      <th className="p-3">Kapanış Tarihi</th>
-                      <th className="p-3">Şube</th>
-                      <th className="p-3">Satış Adedi</th>
-                      <th className="p-3">Satılan Altın (gr)</th>
-                      <th className="p-3 text-right">Toplam Ciro (₺)</th>
-                      <th className="p-3 text-right">Net Kâr (₺)</th>
-                      <th className="p-3">Kapatan Yetkili</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#202534]">
-                    {dailyReportsArchive.map(rep => (
-                      <tr key={rep.id} className="hover:bg-[#161924] transition">
-                        <td className="p-3 font-mono text-amber-300 font-bold">{rep.report_date}</td>
-                        <td className="p-3 text-slate-300">{rep.branch_name || 'Tüm Şirket'}</td>
-                        <td className="p-3 font-mono text-white">{rep.total_sales_count} Fiş</td>
-                        <td className="p-3 font-mono text-amber-300 font-bold">{(rep.total_gold_grams_sold || 0).toFixed(2)} gr</td>
-                        <td className="p-3 text-right font-display font-bold text-white text-sm">
-                          {(rep.total_revenue || 0).toLocaleString('tr-TR')} ₺
-                        </td>
-                        <td className="p-3 text-right font-display font-bold text-emerald-400 text-sm">
-                          {(rep.net_profit || 0).toLocaleString('tr-TR')} ₺
-                        </td>
-                        <td className="p-3 text-slate-400">{rep.closed_by_name || 'Sistem'}</td>
-                      </tr>
-                    ))}
-                    {dailyReportsArchive.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="p-6 text-center text-slate-500">
-                          Henüz arşivlenmiş gün sonu kapanış kaydı bulunmuyor. Yukarıdaki "Günü Kapat &amp; Sisteme Kaydet" butonuyla arşivleyebilirsiniz.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <FinancialReportingDashboard
+            salesList={salesList}
+            analytics={analytics}
+            dailyReportsArchive={dailyReportsArchive}
+            currentUser={currentUser}
+            onSaveDailyReport={handleSaveDailyReport}
+            onPrintReport={handlePrintReport}
+            onFastSelectSaleForEmail={(s) => {
+              setSelectedSaleForEmail(s);
+              setShowEmailModal(true);
+            }}
+          />
         )}
 
         {/* ================= SEKME: ALTIN & DÖVİZ HESAPLAMA PORTALI ================= */}
