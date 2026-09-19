@@ -221,20 +221,32 @@ async def process_sale(
     if customer_id:
         customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
         if customer:
-            customer.total_spent += final_price
-            customer.total_items += 1
+            customer.total_spent = (customer.total_spent or 0.0) + final_price
+            customer.total_items = (customer.total_items or 0) + 1
             customer_name = customer.full_name
             customer_phone = customer.phone or customer_phone
             customer_email = customer.email or customer_email
-    elif customer_name and customer_name != "Müşteri":
-        existing_cust = db.query(models.Customer).filter(models.Customer.full_name == customer_name).first()
+    elif customer_phone or (customer_name and customer_name != "Müşteri"):
+        existing_cust = None
+        if customer_phone:
+            existing_cust = db.query(models.Customer).filter(models.Customer.phone == customer_phone).first()
+        if not existing_cust and customer_name and customer_name != "Müşteri":
+            existing_cust = db.query(models.Customer).filter(models.Customer.full_name.ilike(customer_name)).first()
+
         if existing_cust:
             customer_id = existing_cust.id
-            existing_cust.total_spent += final_price
-            existing_cust.total_items += 1
+            existing_cust.total_spent = (existing_cust.total_spent or 0.0) + final_price
+            existing_cust.total_items = (existing_cust.total_items or 0) + 1
+            if not existing_cust.phone and customer_phone:
+                existing_cust.phone = customer_phone
+            if not existing_cust.email and customer_email:
+                existing_cust.email = customer_email
+            customer_name = existing_cust.full_name
+            customer_phone = existing_cust.phone
+            customer_email = existing_cust.email
         else:
             new_cust = models.Customer(
-                full_name=customer_name,
+                full_name=customer_name if (customer_name and customer_name != "Müşteri") else (f"Müşteri ({customer_phone})" if customer_phone else "Kayıtsız Müşteri"),
                 phone=customer_phone,
                 email=customer_email,
                 customer_type="Bireysel",
@@ -244,6 +256,7 @@ async def process_sale(
             db.add(new_cust)
             db.flush()
             customer_id = new_cust.id
+            customer_name = new_cust.full_name
 
     # Maliyet & Kâr Hesabı
     cost_price = product.cost_price if (product.cost_price and product.cost_price > 0) else round(final_price * 0.82, 2)

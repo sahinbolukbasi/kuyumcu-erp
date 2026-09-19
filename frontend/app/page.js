@@ -1635,16 +1635,19 @@ export default function Home() {
     if (!selectedProductForSale || !token) return;
 
     try {
+      const isSearchPhone = /^[0-9+ ]+$/.test(saleCustomerSearch?.trim() || '');
       const payload = {
         product_id: selectedProductForSale.id,
         customer_id: saleCustomerId ? parseInt(saleCustomerId) : null,
-        customer_name: saleCustomerName || 'Müşteri',
-        customer_phone: saleCustomerPhone || null,
+        customer_name: saleCustomerName || (!isSearchPhone && saleCustomerSearch ? saleCustomerSearch.split(' (')[0] : 'Müşteri'),
+        customer_phone: saleCustomerPhone || (isSearchPhone ? saleCustomerSearch.trim() : null),
         customer_email: saleCustomerEmail || null,
+        user_id: currentUser?.id || null,
+        sold_by_name: currentUser?.full_name || 'Yetkili Satış Danışmanı',
         payment_method: salePaymentMethod,
         discount_amount: parseFloat(saleDiscount || 0),
         gold_rate_at_sale: 3045.0,
-        branch_id: selectedBranchId || 1,
+        branch_id: selectedBranchId || currentUser?.branch_id || 1,
         is_two_man_approved: twoManApproved,
         second_approver_name: twoManApproverName || null,
         masak_id_number: masakIdNumber || null,
@@ -1674,6 +1677,8 @@ export default function Home() {
       setSaleCustomerPhone('');
       setSaleCustomerEmail('');
       setSaleCustomerId('');
+      setSaleCustomerSearch('');
+      setShowQuickCustomerForm(false);
       setSaleDiscount(0);
       setTwoManApproved(false);
       setTwoManPassword('');
@@ -1686,6 +1691,7 @@ export default function Home() {
       fetchProducts();
       fetchSlots();
       fetchSales();
+      fetchCustomers();
       fetchMyCustody();
       fetchAnalytics();
       fetchCapitalReport();
@@ -6477,9 +6483,16 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => {
+                                const isPhone = /^[0-9+ ]+$/.test(saleCustomerSearch.trim());
+                                if (isPhone) {
+                                  setSaleCustomerPhone(saleCustomerSearch.trim());
+                                  setSaleCustomerName('');
+                                } else {
+                                  setSaleCustomerName(saleCustomerSearch.trim());
+                                  setSaleCustomerPhone('');
+                                }
                                 setShowQuickCustomerForm(true);
                                 setIsCustomerDropdownOpen(false);
-                                setSaleCustomerName(saleCustomerSearch);
                               }}
                               className="btn-gold text-[11px] py-1 px-3 block mx-auto font-bold"
                             >
@@ -6511,7 +6524,6 @@ export default function Home() {
                         <label className="text-[11px] text-slate-300 block mb-0.5 font-semibold">Ad Soyad *</label>
                         <input
                           type="text"
-                          required
                           value={saleCustomerName}
                           onChange={(e) => setSaleCustomerName(e.target.value)}
                           placeholder="Müşteri Ad Soyad"
@@ -6522,7 +6534,6 @@ export default function Home() {
                         <label className="text-[11px] text-slate-300 block mb-0.5 font-semibold">Telefon Numarası *</label>
                         <input
                           type="text"
-                          required
                           value={saleCustomerPhone}
                           onChange={(e) => setSaleCustomerPhone(e.target.value)}
                           placeholder="0532..."
@@ -6553,6 +6564,24 @@ export default function Home() {
                           <option value="Toptan">Toptan / Tüccar</option>
                         </select>
                       </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] text-slate-400">Satış tamamlandığında CRM veritabanına otomatik işlenecektir.</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!saleCustomerName && !saleCustomerPhone) {
+                            alert('Lütfen en azından ad soyad veya telefon numarası giriniz.');
+                            return;
+                          }
+                          setShowQuickCustomerForm(false);
+                          setSaleCustomerSearch(`${saleCustomerName || 'Yeni Müşteri'} (${saleCustomerPhone || 'Tel Belirtilmedi'})`);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Müşteriyi Kaydet & Seç</span>
+                      </button>
                     </div>
                   </div>
                 )}
