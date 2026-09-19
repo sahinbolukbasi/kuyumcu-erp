@@ -951,6 +951,79 @@ async def resolve_alert(
     return {"message": "Alarm çözüldü ve susturuldu"}
 
 
+@router.post("/alerts/{alert_id}/acknowledge-and-reset")
+async def acknowledge_and_reset_alarm(
+    alert_id: int,
+    notes: Optional[str] = Body(None, embed=True),
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Kritik İşlem: Yetkili personelin onayıyla eksik gramaj kayıp olarak işlenir, vitrin sensörü mevcut ağırlığa sıfırlanır ve alarm kapatılır."""
+    alert = db.query(models.SecurityAlert).filter(models.SecurityAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alarm bulunamadı")
+
+    resolver = f"{current_user.full_name} ({current_user.role})"
+    weight_lost = alert.weight_lost or 0.0
+
+    alert.is_resolved = True
+    alert.resolved_by = resolver
+    alert.resolved_at = datetime.datetime.utcnow()
+
+    slot = alert.slot
+    old_expected = slot.expected_weight if slot else 0.0
+    new_expected = slot.current_weight if slot else 0.0
+
+    if slot:
+        # Vitrin referans ağırlığını mevcut ağırlığa sıfırla (Böylece tolerans içi NORMAL olur)
+        slot.expected_weight = slot.current_weight
+        slot.status = "NORMAL" if slot.current_weight > 0 else "EMPTY"
+        slot.last_weight_reading = slot.current_weight
+
+    # Detaylı denetim günlüğü kaydet
+    audit_data = {
+        "alert_id": alert.id,
+        "slot_id": slot.id if slot else None,
+        "slot_number": slot.slot_number if slot else None,
+        "weight_lost": weight_lost,
+        "old_expected_weight": old_expected,
+        "new_expected_weight": new_expected,
+        "action": "CRITICAL_ALARM_RESET_AND_LOSS_ACKNOWLEDGED",
+        "authorized_by": current_user.full_name,
+        "user_role": current_user.role,
+        "notes": notes or "Eksik gramaj kayıp/açık olarak kabul edildi ve vitrin sensör referansı sıfırlandı."
+    }
+
+    log = models.SystemLog(
+        level="SECURITY",
+        module="VİTRİN_GÜVENLİK",
+        message=f"KRİTİK GÜVENLİK İŞLEMİ: Askı #{slot.slot_number if slot else alert_id} üzerindeki {weight_lost:.2f} gr eksilme {current_user.full_name} tarafından KAYIP OLARAK ONAYLANDI ve vitrin sıfırlandı.",
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        details_json=json.dumps(audit_data)
+    )
+    db.add(log)
+    db.commit()
+
+    # Tüm ekranları eski normal haline döndürmek için broadcast et
+    await iot_service.manager.broadcast({
+        "type": "ALERT_RESOLVED",
+        "alert_id": alert.id,
+        "slot_id": slot.id if slot else None,
+        "slot_number": slot.slot_number if slot else None,
+        "resolved_by": resolver,
+        "is_reset": True,
+        "new_weight": new_expected
+    })
+
+    return {
+        "status": "success",
+        "message": f"Alarm başarıyla kapatıldı. {weight_lost:.2f} gr kayıp olarak güvenlik günlüğüne işlendi ve vitrin eski çalışır haline getirildi.",
+        "resolved_by": resolver,
+        "lost_grams": weight_lost
+    }
+
+
 # --- TEST VE SİMÜLASYON ENDPOINT'I ---
 @router.post("/simulate")
 async def simulate_iot_action(

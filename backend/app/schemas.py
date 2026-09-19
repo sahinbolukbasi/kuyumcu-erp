@@ -825,8 +825,37 @@ class CustomerInterestOut(BaseModel):
     action_type: str
     notes: Optional[str] = None
     created_at: datetime.datetime
-
     class Config:
         from_attributes = True
 
 
+class DailyReportCreate(BaseModel):
+    report_date: Optional[str] = None
+    branch_id: Optional[int] = None
+    branch_name: Optional[str] = "Konsolide Tüm Şirket"
+    total_revenue: float = 0.0
+    total_gold_grams_sold: float = 0.0
+    total_sales_count: int = 0
+    total_cost: float = 0.0
+    net_profit: float = 0.0
+    sales_summary_json: Optional[str] = None
+    notes: Optional[str] = None
+
+class DailyReportOut(BaseModel):
+    id: int
+    report_date: str
+    branch_id: Optional[int] = None
+    branch_name: Optional[str] = None
+    total_revenue: float
+    total_gold_grams_sold: float
+    total_sales_count: int
+    total_cost: float
+    net_profit: float
+    closed_by_user_id: Optional[int] = None
+    closed_by_name: Optional[str] = None
+    sales_summary_json: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True

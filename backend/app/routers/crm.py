@@ -104,9 +104,9 @@ def get_customer_details(
             "customer_type": customer.customer_type,
             "address": customer.address,
             "notes": customer.notes,
-            "total_spent": customer.total_spent,
-            "total_items": customer.total_items,
-            "created_at": customer.created_at.strftime("%d.%m.%Y %H:%M")
+            "total_spent": customer.total_spent or 0.0,
+            "total_items": customer.total_items or 0,
+            "created_at": customer.created_at.strftime("%d.%m.%Y %H:%M") if customer.created_at else ""
         },
         "sales_history": sales_data,
         "total_gold_grams": round(total_gold_grams, 2)

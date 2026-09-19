@@ -359,3 +359,59 @@ async def process_sale(
     })
 
     return sale
+
+
+@router.post("/daily-reports", response_model=schemas.DailyReportOut)
+def save_daily_report(
+    payload: schemas.DailyReportCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Gün Sonu Kasa Raporunu Kalıcı Olarak Veritabanına Arşivler"""
+    today_str = payload.report_date or datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    
+    report = models.DailyReport(
+        report_date=today_str,
+        branch_id=payload.branch_id or current_user.branch_id,
+        branch_name=payload.branch_name or "Tüm Şirket Konsolide",
+        total_revenue=payload.total_revenue,
+        total_gold_grams_sold=payload.total_gold_grams_sold,
+        total_sales_count=payload.total_sales_count,
+        total_cost=payload.total_cost,
+        net_profit=payload.net_profit,
+        closed_by_user_id=current_user.id,
+        closed_by_name=current_user.full_name,
+        sales_summary_json=payload.sales_summary_json,
+        notes=payload.notes,
+        created_at=datetime.datetime.utcnow()
+    )
+    db.add(report)
+
+    # Denetim günlüğüne yaz
+    audit = models.SystemLog(
+        level="INFO",
+        module="KASA_GÜN_SONU",
+        message=f"{current_user.full_name} tarafından {today_str} Gün Sonu Kasa Kapanışı yapıldı ve arşive kaydedildi. Ciro: {payload.total_revenue:,.2f} ₺, Satılan Altın: {payload.total_gold_grams_sold:.2f} gr.",
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        details_json=json.dumps({
+            "report_date": today_str,
+            "revenue": payload.total_revenue,
+            "grams": payload.total_gold_grams_sold,
+            "sales_count": payload.total_sales_count
+        })
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(report)
+    return report
+
+
+@router.get("/daily-reports", response_model=List[schemas.DailyReportOut])
+def get_daily_reports(
+    limit: int = 60,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Geçmiş Gün Sonu Kasa Raporu Arşivi"""
+    return db.query(models.DailyReport).order_by(models.DailyReport.id.desc()).limit(limit).all()

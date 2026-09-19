@@ -70,11 +70,16 @@ import {
   ShoppingCart,
   Menu,
   X,
-  MapPin
+  MapPin,
+  Calculator,
+  UserPlus
 } from 'lucide-react';
 
 import ProductPresentationShowcase from './components/ProductPresentationShowcase';
 import AddProductLuxuryModal from './components/AddProductLuxuryModal';
+import CriticalAlarmResetModal from './components/CriticalAlarmResetModal';
+import GoldCurrencyCalculator from './components/GoldCurrencyCalculator';
+import PatronAnalyticsDashboard from './components/PatronAnalyticsDashboard';
 
 let API_BASE = 'http://127.0.0.1:8000';
 let WS_URL = 'ws://127.0.0.1:8000/ws/live';
@@ -226,6 +231,18 @@ export default function Home() {
   const [saleCustomerPhone, setSaleCustomerPhone] = useState('');
   const [saleCustomerEmail, setSaleCustomerEmail] = useState('');
   const [saleDiscount, setSaleDiscount] = useState(0);
+
+  // Müşteri Anlık Arama (Autocomplete) & Hızlı Kayıt
+  const [saleCustomerSearch, setSaleCustomerSearch] = useState('');
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const [showQuickCustomerForm, setShowQuickCustomerForm] = useState(false);
+  const [quickCustomerType, setQuickCustomerType] = useState('Bireysel');
+
+  // Kritik Alarm Sıfırlama Modalı & Kalıcı Gün Sonu Arşivi
+  const [showResetLossModal, setShowResetLossModal] = useState(null); // alert object
+  const [isResettingAlarm, setIsResettingAlarm] = useState(false);
+  const [dailyReportsArchive, setDailyReportsArchive] = useState([]);
+  const [selectedArchivedReport, setSelectedArchivedReport] = useState(null);
 
   // Satış Filtreleri
   const [salesTimeRange, setSalesTimeRange] = useState('all');
@@ -696,6 +713,84 @@ export default function Home() {
     } catch (e) { console.error("Sales fetch error", e); }
   };
 
+  const fetchDailyReportsArchive = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/sales/daily-reports`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setDailyReportsArchive(await res.json());
+    } catch (e) { console.error("Daily reports archive fetch error", e); }
+  };
+
+  const handleSaveDailyReport = async () => {
+    if (!token) return;
+    if (!window.confirm("Bugünün Gün Sonu Kasa Raporunu sisteme kalıcı olarak kaydetmek ve resmi Z-Raporu arşivine eklemek istiyor musunuz?")) return;
+    try {
+      const payload = {
+        report_date: new Date().toISOString().split('T')[0],
+        branch_id: currentUser?.branch_id || null,
+        branch_name: branchOverview?.branch_name || "Tüm Şirket Konsolide",
+        total_revenue: analytics?.total_sales_revenue || 0,
+        total_gold_grams_sold: analytics?.total_gold_grams_sold || 0,
+        total_sales_count: analytics?.total_sales_count || 0,
+        total_cost: profitMarginData?.total_cost || 0,
+        net_profit: profitMarginData?.net_profit || 0,
+        sales_summary_json: JSON.stringify(salesList.slice(0, 30)),
+        notes: `${currentUser?.full_name} tarafından gün sonu kasa devri tamamlandı.`
+      };
+      const res = await fetch(`${API_BASE}/api/v1/sales/daily-reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        alert("✅ Gün Sonu Kasa Raporu başarıyla veritabanına kaydedildi ve arşive eklendi!");
+        fetchDailyReportsArchive();
+        fetchSystemLogs();
+      } else {
+        const err = await res.json();
+        alert("Hata: " + (err.detail || "Rapor kaydedilemedi"));
+      }
+    } catch (e) {
+      alert("Bağlantı hatası: " + e.message);
+    }
+  };
+
+  const handleAcknowledgeAndResetAlarm = async (alertId, notes = '') => {
+    if (!token) return;
+    setIsResettingAlarm(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/iot/alerts/${alertId}/acknowledge-and-reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ notes })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✅ ${data.message}`);
+        setShowResetLossModal(null);
+        setLiftMatchWizard(null);
+        fetchAlerts();
+        fetchSlots();
+        fetchSystemLogs();
+      } else {
+        const err = await res.json();
+        alert("Hata: " + (err.detail || "İşlem tamamlanamadı"));
+      }
+    } catch (e) {
+      alert("Bağlantı hatası: " + e.message);
+    } finally {
+      setIsResettingAlarm(false);
+    }
+  };
+
   const fetchStaffPerformance = async () => {
     if (!token || !['ADMIN', 'MANAGER'].includes(currentUser?.role)) return;
     try {
@@ -1137,6 +1232,7 @@ export default function Home() {
       fetchHourlyTraffic();
       fetchProfitMargins();
       fetchBranchOverview();
+      fetchDailyReportsArchive();
       if (['ADMIN', 'MANAGER'].includes(currentUser?.role)) {
         fetchStaffPerformance();
         fetchStaffList();
@@ -2462,6 +2558,24 @@ export default function Home() {
               </div>
             </button>
 
+            {/* ALTIN & DÖVİZ HESAPLAMA PORTALI */}
+            <button
+              onClick={() => { setActiveTab('calculator'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
+                activeTab === 'calculator'
+                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
+                  : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calculator className="w-4 h-4 text-amber-400" />
+                <span>Altın &amp; Döviz Hesaplama</span>
+              </div>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                Canlı Kur
+              </span>
+            </button>
+
             {/* 6. MÜŞTERİ CRM, KAPORA & SERTİFİKA (PRD Modül 7) */}
             <button
               onClick={() => { setActiveTab('crm'); setIsMobileMenuOpen(false); }}
@@ -2482,8 +2596,26 @@ export default function Home() {
               )}
             </button>
 
-            {/* 7. MAĞAZA YÖNETİMİ & ŞUBELER (PRD Modül 1 - ADMİN) */}
-            {currentUser?.role === 'ADMIN' && (
+            {/* PATRON & YÖNETİCİ BİLGİ EKRANI (VIP) */}
+            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
+              <button
+                onClick={() => { setActiveTab('patron_dashboard'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
+                  activeTab === 'patron_dashboard'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 border-amber-300 font-black shadow-lg'
+                    : 'bg-gradient-to-r from-amber-500/10 to-amber-500/5 text-amber-300 border-amber-500/40 hover:bg-amber-500/20 font-bold'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Activity className="w-4 h-4 text-amber-400" />
+                  <span>Patron &amp; Yönetici Ekranı</span>
+                </div>
+                <span className="text-[10px] font-mono bg-black/40 text-amber-300 px-1.5 py-0.5 rounded font-bold">VIP</span>
+              </button>
+            )}
+
+            {/* 7. MAĞAZA YÖNETİMİ & ŞUBELER (PRD Modül 1 - ADMİN & MÜDÜR) */}
+            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
               <button
                 onClick={() => { setActiveTab('management_hub'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
@@ -2715,6 +2847,8 @@ export default function Home() {
                 {activeTab === 'vitrin' && 'Canlı Vitrin & Askı Güvenliği'}
                 {activeTab === 'custody' && 'Masamdaki Ürünler (Zimmet)'}
                 {activeTab === 'sales' && (currentUser?.role === 'STAFF' ? 'Satışlarım & Fişler' : 'Kasa & Hızlı POS Satış')}
+                {activeTab === 'calculator' && 'Canlı Altın & Döviz Hesaplama Portalı'}
+                {activeTab === 'patron_dashboard' && 'Patron & Yönetici Bilgi Ekranı (Performans & Denetim)'}
                 {activeTab === 'stock_locations' && 'Stok & Fiziksel Konum Takibi (Kasa / Tabla / Askı)'}
                 {activeTab === 'crm' && 'Müşteri CRM, Kapora & Sertifika'}
                 {activeTab === 'staff_roles' && 'Personel & Mağaza Yetkileri (RBAC)'}
@@ -2819,16 +2953,21 @@ export default function Home() {
                 DİKKAT: {alerts.length} ADET İZİNSİZ VİTRİN HAREKETİ / AĞIRLIK EKSİLMESİ ALGILANDI!
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {alerts.slice(0, 2).map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => handleTriggerIdentifyLift(a.slot_id, a.weight_lost)}
-                  className="bg-white text-rose-900 hover:bg-rose-100 text-[11px] font-bold py-1 px-2.5 rounded shadow transition"
-                >
-                  #{a.slot_id} Ürünü Eşle &amp; Zimmete Al
-                </button>
-              ))}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                onClick={() => handleTriggerIdentifyLift(alerts[0].slot_id, alerts[0].weight_lost)}
+                className="bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-black py-1.5 px-3.5 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
+              >
+                <span>🔍</span>
+                <span>#{alerts[0].slot_id} Ürünü Eşle &amp; Masama Al</span>
+              </button>
+              <button
+                onClick={() => setShowResetLossModal(alerts[0])}
+                className="bg-gradient-to-r from-rose-900 to-red-950 hover:from-rose-800 hover:to-red-900 text-rose-100 border border-rose-400/80 text-xs font-black py-1.5 px-3.5 rounded-xl shadow-lg flex items-center gap-1.5 transition active:scale-95"
+              >
+                <span>⚠️</span>
+                <span>Hatayı Kapat &amp; Vitrini Sıfırla (Kayıp Kaydı)</span>
+              </button>
             </div>
           </div>
         )}
@@ -3141,7 +3280,7 @@ export default function Home() {
                         >
                           {slot.is_inspection_authorized ? '✓ İzinli' : 'İnceleme İzni'}
                         </button>
-                        {currentUser.role === 'ADMIN' && (
+                        {currentUser?.role === 'ADMIN' && (
                           <button
                             onClick={() => handleCalibrate(slot.id)}
                             className="text-[11px] px-1.5 py-1 bg-[#191c26] text-slate-400 hover:text-amber-400 rounded transition"
@@ -3428,7 +3567,7 @@ export default function Home() {
                   ))}
                 </div>
 
-                {currentUser.role === 'ADMIN' ? (
+                {currentUser?.role === 'ADMIN' ? (
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-slate-400 font-medium">Personel:</span>
                     <select
@@ -3444,7 +3583,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="text-xs bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-lg font-semibold">
-                    👤 Kendi Satışlarınız ({currentUser.full_name})
+                    👤 Kendi Satışlarınız ({currentUser?.full_name || 'Personel'})
                   </div>
                 )}
 
@@ -3797,10 +3936,24 @@ export default function Home() {
                 <h2 className="font-cinzel text-lg font-bold text-white">GÜN SONU KASA & MAĞAZA RAPORU</h2>
                 <p className="text-xs text-slate-400">Resmi onaylı, kaşeli A4 formatında döküm alın ve PDF olarak kaydedin.</p>
               </div>
-              <button onClick={handlePrintReport} className="btn-gold py-2 px-4 text-xs">
-                <Printer className="w-4 h-4" />
-                <span>📄 PDF Olarak Kaydet / Yazdır</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveDailyReport}
+                  className="btn-gold py-2 px-4 text-xs font-bold shadow flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>💾 Günü Kapat &amp; Sisteme Kaydet</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintReport}
+                  className="btn-secondary py-2 px-4 text-xs flex items-center gap-1.5 border-amber-500/40 text-amber-300"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>📄 Resmi A4 Yazdır / PDF</span>
+                </button>
+              </div>
             </div>
 
             <div id="printable-report" className="luxury-card p-6 border-amber-500/30 space-y-6">
@@ -3887,7 +4040,108 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {/* GEÇMİŞ GÜN SONU RAPORLARI ARŞİVİ */}
+            <div className="luxury-card p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-[#242938] pb-3">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h3 className="font-cinzel text-sm font-bold text-white">
+                      GEÇMİŞ GÜN SONU KASA RAPORLARI (Z-RAPORU ARŞİVİ)
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Veritabanında kalıcı saklanan geçmiş kapanış raporları ve cirolar
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchDailyReportsArchive}
+                  className="btn-secondary text-xs py-1 px-3"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Yenile</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-[#181b26] text-slate-400 uppercase text-[10px] font-mono">
+                    <tr>
+                      <th className="p-3">Kapanış Tarihi</th>
+                      <th className="p-3">Şube</th>
+                      <th className="p-3">Satış Adedi</th>
+                      <th className="p-3">Satılan Altın (gr)</th>
+                      <th className="p-3 text-right">Toplam Ciro (₺)</th>
+                      <th className="p-3 text-right">Net Kâr (₺)</th>
+                      <th className="p-3">Kapatan Yetkili</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#202534]">
+                    {dailyReportsArchive.map(rep => (
+                      <tr key={rep.id} className="hover:bg-[#161924] transition">
+                        <td className="p-3 font-mono text-amber-300 font-bold">{rep.report_date}</td>
+                        <td className="p-3 text-slate-300">{rep.branch_name || 'Tüm Şirket'}</td>
+                        <td className="p-3 font-mono text-white">{rep.total_sales_count} Fiş</td>
+                        <td className="p-3 font-mono text-amber-300 font-bold">{(rep.total_gold_grams_sold || 0).toFixed(2)} gr</td>
+                        <td className="p-3 text-right font-display font-bold text-white text-sm">
+                          {(rep.total_revenue || 0).toLocaleString('tr-TR')} ₺
+                        </td>
+                        <td className="p-3 text-right font-display font-bold text-emerald-400 text-sm">
+                          {(rep.net_profit || 0).toLocaleString('tr-TR')} ₺
+                        </td>
+                        <td className="p-3 text-slate-400">{rep.closed_by_name || 'Sistem'}</td>
+                      </tr>
+                    ))}
+                    {dailyReportsArchive.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-slate-500">
+                          Henüz arşivlenmiş gün sonu kapanış kaydı bulunmuyor. Yukarıdaki "Günü Kapat &amp; Sisteme Kaydet" butonuyla arşivleyebilirsiniz.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* ================= SEKME: ALTIN & DÖVİZ HESAPLAMA PORTALI ================= */}
+        {activeTab === 'calculator' && (
+          <GoldCurrencyCalculator
+            liveRates={liveRates}
+            currentUser={currentUser}
+            onFastSale={(p) => {
+              setSelectedProductForSale(p);
+              setShowSaleModal(true);
+            }}
+          />
+        )}
+
+        {/* ================= SEKME: PATRON & YÖNETİCİ BİLGİ EKRANI (VIP) ================= */}
+        {activeTab === 'patron_dashboard' && (
+          <PatronAnalyticsDashboard
+            analytics={analytics}
+            profitMarginData={profitMarginData}
+            staffPerformance={staffPerformance}
+            serviceAnalytics={serviceAnalytics}
+            hourlyTraffic={hourlyTraffic}
+            branches={branches}
+            products={products}
+            salesList={salesList}
+            systemLogs={systemLogs}
+            liveRates={liveRates}
+            onRefresh={() => {
+              fetchAnalytics();
+              fetchProfitMargins();
+              if (currentUser?.role === 'ADMIN') fetchStaffPerformance();
+              fetchProducts();
+              fetchSales();
+              fetchSystemLogs();
+            }}
+          />
         )}
 
         {/* ================= SEKME 6: DÖVİZ & ALTIN CANLI GRAFİĞİ ================= */}
@@ -4327,7 +4581,7 @@ export default function Home() {
                   </button>
                 </div>
 
-                {currentUser.role === 'ADMIN' && (
+                {currentUser?.role === 'ADMIN' && (
                   <>
                     <button
                       onClick={() => setShowBulkImportModal(true)}
@@ -4498,7 +4752,7 @@ export default function Home() {
         )}
 
         {/* ================= SEKME 11: IOT TABLA & IP YAPILANDIRMA ================= */}
-        {activeTab === 'iot_devices' && currentUser.role === 'ADMIN' && (
+        {activeTab === 'iot_devices' && currentUser?.role === 'ADMIN' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between bg-[#12141c] p-4 rounded-xl border border-[#242938]">
               <h2 className="font-cinzel text-lg font-bold text-white">IOT TABLA & IP YAPILANDIRMASI</h2>
@@ -5736,7 +5990,7 @@ export default function Home() {
               <div>
                 <h2 className="font-cinzel text-lg font-bold text-white flex items-center gap-2">
                   <Users className="w-5 h-5 text-blue-400" />
-                  MAĞAZA EKİBİM & PERSONEL PERFORMANSI ({currentUser.branch_name || 'Şubem'})
+                  MAĞAZA EKİBİM & PERSONEL PERFORMANSI ({currentUser?.branch_name || 'Şubem'})
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Mağazanızda çalışan satış danışmanları ve onların güncel satış performanslarını inceleyebilirsiniz.
@@ -5744,7 +5998,7 @@ export default function Home() {
               </div>
               <button
                 onClick={() => {
-                  setNewStaff(prev => ({ ...prev, role: 'STAFF', branch_id: currentUser.branch_id }));
+                  setNewStaff(prev => ({ ...prev, role: 'STAFF', branch_id: currentUser?.branch_id }));
                   setShowAddStaffModal(true);
                 }}
                 className="btn-gold text-xs py-2 px-3 font-bold flex items-center gap-1.5"
@@ -5756,7 +6010,7 @@ export default function Home() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {staffList
-                .filter(u => u.branch_id === currentUser.branch_id && u.role === 'STAFF')
+                .filter(u => u.branch_id === currentUser?.branch_id && u.role === 'STAFF')
                 .map(staff => {
                   const staffSales = salesList.filter(s => s.user_id === staff.id);
                   const staffRevenue = staffSales.reduce((acc, s) => acc + s.sale_price, 0);
@@ -5788,7 +6042,7 @@ export default function Home() {
                     </div>
                   );
                 })}
-              {staffList.filter(u => u.branch_id === currentUser.branch_id && u.role === 'STAFF').length === 0 && (
+              {staffList.filter(u => u.branch_id === currentUser?.branch_id && u.role === 'STAFF').length === 0 && (
                 <div className="col-span-full text-center p-8 bg-[#12141c] rounded-xl border border-[#242938] text-slate-400 text-xs">
                   Mağazanıza henüz atanmış satış danışmanı bulunmuyor. Yukarıdaki butondan yeni personel ekleyebilirsiniz.
                 </div>
@@ -5945,6 +6199,24 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Hatayı Kapat / Vitrin Sıfırlama Butonu */}
+            <div className="pt-3 mt-3 border-t border-[#242938]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetLossModal({
+                    id: liftMatchWizard.alert_id || alerts[0]?.id || 1,
+                    slot_id: liftMatchWizard.slot_id,
+                    weight_lost: liftMatchWizard.weight_lost
+                  });
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/50 text-rose-200 text-xs font-bold flex items-center justify-center gap-2 transition"
+              >
+                <span>⚠️</span>
+                <span>Askıda Ürün Yok / Hatayı Kapat &amp; Vitrini Sıfırla (Kayıp Kaydı)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -6089,50 +6361,227 @@ export default function Home() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Müşteri Seçin (CRM):</label>
-                <select
-                  value={saleCustomerId}
-                  onChange={(e) => {
-                    setSaleCustomerId(e.target.value);
-                    const found = customers.find(c => c.id === parseInt(e.target.value));
-                    if (found) {
-                      setSaleCustomerName(found.full_name);
-                      setSaleCustomerPhone(found.phone || '');
-                      setSaleCustomerEmail(found.email || '');
-                    }
-                  }}
-                  className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none mb-2"
-                >
-                  <option value="">-- Yeni Müşteri / Hızlı Satış --</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.full_name} ({c.customer_type} - {c.phone})</option>
-                  ))}
-                </select>
+              {/* OTOMATİK SEÇİLEN SATIŞ TEMSİLCİSİ */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[#141824] border border-amber-500/30 text-xs">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-amber-400" />
+                  <span className="text-slate-300">Satış Temsilcisi:</span>
+                  <strong className="text-white font-bold">{currentUser?.full_name || 'Yetkili Personel'}</strong>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                    {currentUser?.role === 'ADMIN' ? 'Yönetici' : currentUser?.role === 'MANAGER' ? 'Müdür' : 'Personel'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-emerald-400 font-mono font-bold">✓ Otomatik Seçildi</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Müşteri Ad Soyad</label>
-                  <input
-                    type="text"
-                    required
-                    value={saleCustomerName}
-                    onChange={(e) => setSaleCustomerName(e.target.value)}
-                    placeholder="Ad Soyad"
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
+              {/* CANLI MÜŞTERİ ARAMA (İSİM / TELEFON) VEYA HIZLI KAYIT */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-300 font-semibold text-xs flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Müşteri (İsim veya Telefon ile Ara):</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickCustomerForm(!showQuickCustomerForm);
+                      setIsCustomerDropdownOpen(false);
+                    }}
+                    className="text-amber-400 hover:text-amber-300 text-[11px] font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{showQuickCustomerForm ? 'Aramaya Dön' : '+ Yeni Müşteri Kaydı Aç'}</span>
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Telefon</label>
-                  <input
-                    type="text"
-                    value={saleCustomerPhone}
-                    onChange={(e) => setSaleCustomerPhone(e.target.value)}
-                    placeholder="0532..."
-                    className="w-full bg-[#0e1017] border border-[#242938] text-white rounded p-2 text-xs focus:outline-none"
-                  />
-                </div>
+
+                {!showQuickCustomerForm ? (
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Müşteri adı veya telefon yazın (örn: 0532... veya Zeynep)..."
+                        value={saleCustomerSearch}
+                        onChange={(e) => {
+                          setSaleCustomerSearch(e.target.value);
+                          setIsCustomerDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsCustomerDropdownOpen(true)}
+                        className="w-full bg-[#0e1017] border border-[#242938] text-white rounded-xl pl-9 pr-8 py-2.5 text-xs focus:outline-none focus:border-amber-400 placeholder:text-slate-500"
+                      />
+                      {saleCustomerSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSaleCustomerSearch('');
+                            setSaleCustomerId('');
+                            setSaleCustomerName('');
+                            setSaleCustomerPhone('');
+                            setSaleCustomerEmail('');
+                            setIsCustomerDropdownOpen(false);
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Autocomplete Dropdown List */}
+                    {isCustomerDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-[#12141c] border border-amber-500/40 rounded-xl shadow-2xl max-h-48 overflow-y-auto z-50 divide-y divide-[#202534]">
+                        {customers.filter(c => {
+                          if (!saleCustomerSearch) return true;
+                          const q = saleCustomerSearch.toLowerCase();
+                          return (c.full_name || '').toLowerCase().includes(q) || (c.phone || '').includes(q);
+                        }).length > 0 ? (
+                          customers
+                            .filter(c => {
+                              if (!saleCustomerSearch) return true;
+                              const q = saleCustomerSearch.toLowerCase();
+                              return (c.full_name || '').toLowerCase().includes(q) || (c.phone || '').includes(q);
+                            })
+                            .map(c => (
+                              <div
+                                key={c.id}
+                                onClick={() => {
+                                  setSaleCustomerId(c.id);
+                                  setSaleCustomerName(c.full_name);
+                                  setSaleCustomerPhone(c.phone || '');
+                                  setSaleCustomerEmail(c.email || '');
+                                  setSaleCustomerSearch(`${c.full_name} (${c.phone || 'Tel Yok'})`);
+                                  setIsCustomerDropdownOpen(false);
+                                }}
+                                className="p-2.5 hover:bg-amber-500/10 cursor-pointer flex items-center justify-between transition"
+                              >
+                                <div>
+                                  <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                                    <span>{c.full_name}</span>
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
+                                      {c.customer_type}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                    📞 {c.phone || 'Telefon Kayıtsız'}
+                                  </div>
+                                </div>
+                                <div className="text-right font-mono text-[11px]">
+                                  <span className="text-amber-400 font-bold">{(c.total_spent || 0).toLocaleString('tr-TR')} ₺</span>
+                                  <span className="text-slate-500 block text-[10px]">({c.total_items || 0} Parça)</span>
+                                </div>
+                              </div>
+                            ))
+                        ) : (
+                          <div className="p-3 text-center text-xs text-slate-400 space-y-2">
+                            <span>"{saleCustomerSearch}" adına kayıtlı müşteri bulunamadı.</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowQuickCustomerForm(true);
+                                setIsCustomerDropdownOpen(false);
+                                setSaleCustomerName(saleCustomerSearch);
+                              }}
+                              className="btn-gold text-[11px] py-1 px-3 block mx-auto font-bold"
+                            >
+                              + "{saleCustomerSearch}" Olarak Yeni Kayıt Aç
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Hızlı Yeni Müşteri Kayıt Alanı */
+                  <div className="p-3 rounded-xl bg-gradient-to-b from-[#161a28] to-[#0e1017] border border-emerald-500/50 space-y-2.5 shadow-lg">
+                    <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <UserPlus className="w-4 h-4" />
+                        <span>Yeni Müşteri Kaydı (Satışla Otomatik CRM'e Eklenecek)</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickCustomerForm(false)}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        ✕ Kapat
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-0.5 font-semibold">Ad Soyad *</label>
+                        <input
+                          type="text"
+                          required
+                          value={saleCustomerName}
+                          onChange={(e) => setSaleCustomerName(e.target.value)}
+                          placeholder="Müşteri Ad Soyad"
+                          className="w-full bg-[#090b10] border border-[#262c3e] rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-0.5 font-semibold">Telefon Numarası *</label>
+                        <input
+                          type="text"
+                          required
+                          value={saleCustomerPhone}
+                          onChange={(e) => setSaleCustomerPhone(e.target.value)}
+                          placeholder="0532..."
+                          className="w-full bg-[#090b10] border border-[#262c3e] rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-0.5">E-Posta (Sertifika İçin)</label>
+                        <input
+                          type="email"
+                          value={saleCustomerEmail}
+                          onChange={(e) => setSaleCustomerEmail(e.target.value)}
+                          placeholder="musteri@ornek.com"
+                          className="w-full bg-[#090b10] border border-[#262c3e] rounded-lg p-2 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-0.5">Müşteri Tipi</label>
+                        <select
+                          value={quickCustomerType}
+                          onChange={(e) => setQuickCustomerType(e.target.value)}
+                          className="w-full bg-[#090b10] border border-[#262c3e] rounded-lg p-2 text-xs text-white focus:outline-none"
+                        >
+                          <option value="Bireysel">Bireysel Müşteri</option>
+                          <option value="VIP">VIP Müşteri</option>
+                          <option value="Toptan">Toptan / Tüccar</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Seçili Müşteri Rozeti */}
+                {saleCustomerName && !showQuickCustomerForm && (
+                  <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="text-white font-bold">{saleCustomerName}</span>
+                        {saleCustomerPhone && <span className="text-slate-400 font-mono ml-2">({saleCustomerPhone})</span>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSaleCustomerId('');
+                        setSaleCustomerName('');
+                        setSaleCustomerPhone('');
+                        setSaleCustomerEmail('');
+                        setSaleCustomerSearch('');
+                      }}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold underline"
+                    >
+                      Müşteriyi Değiştir
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -8254,6 +8703,17 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ================= MODAL: KRİTİK ALARM SIFIRLAMA & KAYIP GRAMAJ TEYİDİ ================= */}
+      {showResetLossModal && (
+        <CriticalAlarmResetModal
+          alertData={showResetLossModal}
+          currentUser={currentUser}
+          isSubmitting={isResettingAlarm}
+          onClose={() => setShowResetLossModal(null)}
+          onConfirmReset={(alertId, notes) => handleAcknowledgeAndResetAlarm(alertId, notes)}
+        />
       )}
 
       {/* ================= CANLI IOT DONANIM & KOPMA BİLDİRİM TOASTI ================= */}

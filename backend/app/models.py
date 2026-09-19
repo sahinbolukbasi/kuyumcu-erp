@@ -447,3 +447,21 @@ class CustomerInterest(Base):
     user = relationship("User")
     branch = relationship("Branch")
 
+
+class DailyReport(Base):
+    __tablename__ = "daily_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    report_date = Column(String(20), index=True) # YYYY-MM-DD
+    branch_id = Column(Integer, nullable=True)
+    branch_name = Column(String(100), default="Konsolide Tüm Şirket")
+    total_revenue = Column(Float, default=0.0)
+    total_gold_grams_sold = Column(Float, default=0.0)
+    total_sales_count = Column(Integer, default=0)
+    total_cost = Column(Float, default=0.0)
+    net_profit = Column(Float, default=0.0)
+    closed_by_user_id = Column(Integer, nullable=True)
+    closed_by_name = Column(String(100), default="Sistem Yöneticisi")
+    sales_summary_json = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
