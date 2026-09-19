@@ -2713,25 +2713,7 @@ export default function Home() {
               )}
             </button>
 
-            {/* SAAS MASTER HQ: LİSANS, FİRMA & BULUT YÖNETİMİ (SADECE SUPERADMIN/ADMIN) */}
-            {currentUser?.role === 'ADMIN' && (
-              <button
-                onClick={() => { setActiveTab('saas_hq'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all text-left border ${
-                  activeTab === 'saas_hq'
-                    ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black border-amber-300 font-black shadow-xl ring-2 ring-amber-400/50'
-                    : 'bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/5 text-amber-300 border-amber-500/50 hover:bg-amber-500/30 font-bold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-amber-400" />
-                  <span>👑 SaaS Master HQ &amp; Lisans</span>
-                </div>
-                <span className="text-[9px] font-mono bg-black/60 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/40">
-                  MASTER
-                </span>
-              </button>
-            )}
+
 
             {/* PATRON & YÖNETİCİ BİLGİ EKRANI (VIP) */}
             {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
@@ -2986,7 +2968,7 @@ export default function Home() {
                 {activeTab === 'custody' && 'Masamdaki Ürünler (Zimmet)'}
                 {activeTab === 'sales' && (currentUser?.role === 'STAFF' ? 'Satışlarım & Fişler' : 'Kasa & Hızlı POS Satış')}
                 {activeTab === 'gold_purchases' && '🪙 Müşteriden Altın Satın Alma & Hurda Kasa Takibi'}
-                {activeTab === 'saas_hq' && '👑 Golden Guard Master HQ — SaaS, Lisans & Firma Yönetim Merkezi'}
+
                 {activeTab === 'calculator' && '🧮 Canlı Altın & Döviz Hesaplama Portalı'}
                 {activeTab === 'patron_dashboard' && '👑 Patron & Yönetici Bilgi Ekranı (Performans & Denetim)'}
                 {activeTab === 'stock_locations' && 'Stok & Fiziksel Konum Takibi (Kasa / Tabla / Askı)'}
@@ -4156,14 +4138,7 @@ export default function Home() {
           />
         )}
 
-        {/* ================= SEKME: SAAS MASTER HQ (LİSANS & FİRMA YÖNETİMİ) ================= */}
-        {activeTab === 'saas_hq' && (
-          <SuperAdminMasterHQ
-            currentUser={currentUser}
-            apiBase={API_BASE}
-            token={token}
-          />
-        )}
+
 
         {/* ================= SEKME: ALTIN & DÖVİZ HESAPLAMA PORTALI ================= */}
         {activeTab === 'calculator' && (
