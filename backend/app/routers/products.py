@@ -19,21 +19,36 @@ def list_products(
     status: Optional[str] = None,
     search: Optional[str] = None,
     branch_id: Optional[int] = None,
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Product)
+    
+    # 1. Multi-Tenant Firma İzolasyonu (Başka firmaların stokları kesinlikle karışmaz!)
+    if current_user and hasattr(current_user, 'tenant_id') and current_user.tenant_id:
+        query = query.filter(models.Product.tenant_id == current_user.tenant_id)
+
+    # 2. Şube Filtresi (Belirli bir mağaza veya tüm şubeler)
     if branch_id and branch_id > 0:
         query = query.filter(models.Product.branch_id == branch_id)
-    if category:
+
+    # 3. Kategori ve Durum Filtreleri
+    if category and category != 'ALL':
         query = query.filter(models.Product.category == category)
-    if status:
+    if status and status != 'ALL':
         query = query.filter(models.Product.status == status)
+
+    # 4. Gelişmiş Arama (Ürün Adı, Barkod, Ayar, Kategori)
     if search:
-        search_pattern = f"%{search}%"
+        search_clean = search.strip()
+        search_pattern = f"%{search_clean}%"
         query = query.filter(
             (models.Product.name.ilike(search_pattern)) |
-            (models.Product.barcode.ilike(search_pattern))
+            (models.Product.barcode.ilike(search_pattern)) |
+            (models.Product.category.ilike(search_pattern)) |
+            (models.Product.purity.ilike(search_pattern))
         )
+
     return query.order_by(models.Product.id.desc()).all()
 
 
@@ -356,4 +371,79 @@ def generate_product_certificate(product_id: int, db: Session = Depends(get_db))
         guarantee_terms="Bu mücevher, Golden Guard Haute Joaillerie kalite ve ayar güvencesi altındadır. Uluslararası Darphane ve Kuyumcular Odası standartlarına uygundur. Ömür boyu ücretsiz bakım, rodaj ve taş tırnak kontrolü dahildir.",
         approved_by="Baş Usta & Şirket Yetkilisi"
     )
+
+
+@router.post("/{product_id}/take-to-desk")
+def take_product_to_desk(
+    product_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Stoktaki bir ürünü personelin masasına/zimmetine alır (Müşteriye sunum seansı).
+    """
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Ürün bulunamadı")
+
+    if product.status == "Satıldı":
+        raise HTTPException(status_code=400, detail="Satılmış ürün masaya alınamaz")
+
+    product.custody_user_id = current_user.id
+    product.custody_started_at = datetime.datetime.utcnow()
+    product.status = "Zimmette"
+
+    # Log kaydet
+    log = models.SystemLog(
+        level="INFO",
+        module="CUSTODY",
+        message=f"{current_user.full_name} ({current_user.username}), '{product.name}' ({product.barcode}) ürününü stoktan masasına (zimmetine) aldı.",
+        user_name=current_user.full_name,
+        created_at=datetime.datetime.utcnow()
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(product)
+
+    return {
+        "status": "success",
+        "message": f"'{product.name}' başarıyla masanıza alındı.",
+        "product_id": product.id,
+        "custody_user_name": current_user.full_name
+    }
+
+
+@router.post("/{product_id}/return-to-shelf")
+def return_product_to_shelf(
+    product_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Masadaki ürünü vitrine/kasaya geri iade eder.
+    """
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Ürün bulunamadı")
+
+    product.custody_user_id = None
+    product.custody_started_at = None
+    product.status = "Vitrinde"
+
+    log = models.SystemLog(
+        level="INFO",
+        module="CUSTODY",
+        message=f"{current_user.full_name} ({current_user.username}), '{product.name}' ürününü masadan vitrine/stoka iade etti.",
+        user_name=current_user.full_name,
+        created_at=datetime.datetime.utcnow()
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(product)
+
+    return {
+        "status": "success",
+        "message": f"'{product.name}' vitrine/stoka geri iade edildi."
+    }
+
 

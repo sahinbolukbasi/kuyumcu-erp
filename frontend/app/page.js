@@ -89,6 +89,10 @@ import FinancialReportingDashboard from './components/FinancialReportingDashboar
 import GoldPurchasesView from './components/GoldPurchasesView';
 import GoldPurchaseModal from './components/GoldPurchaseModal';
 import SuperAdminMasterHQ from './components/SuperAdminMasterHQ';
+import CompanyProfileManager from './components/CompanyProfileManager';
+import InvoiceManager from './components/InvoiceManager';
+import CustomerServiceCart from './components/CustomerServiceCart';
+import DeviceManager from './components/DeviceManager';
 
 let API_BASE = 'http://127.0.0.1:8000';
 let WS_URL = 'ws://127.0.0.1:8000/ws/live';
@@ -305,6 +309,26 @@ export default function Home() {
   const [branchOverview, setBranchOverview] = useState(null);
   const [userRoleEditMap, setUserRoleEditMap] = useState({}); // { [userId]: { role, branch_id } }
   const [roleUpdateStatus, setRoleUpdateStatus] = useState('');
+
+  // 6. Sepet, Toplu Satış & Masaya Stoktan Ürün Alma State'leri
+  const [cartCount, setCartCount] = useState(0);
+  const [activeCartData, setActiveCartData] = useState(null);
+  const [showQuickCartModal, setShowQuickCartModal] = useState(false);
+  const [showBulkCheckoutModal, setShowBulkCheckoutModal] = useState(false);
+  const [cartToastMsg, setCartToastMsg] = useState('');
+  const [bulkCheckoutCustomerName, setBulkCheckoutCustomerName] = useState('');
+  const [bulkCheckoutCustomerPhone, setBulkCheckoutCustomerPhone] = useState('');
+  const [bulkCheckoutPaymentMethod, setBulkCheckoutPaymentMethod] = useState('Nakit');
+  const [bulkCheckoutLoading, setBulkCheckoutLoading] = useState(false);
+
+  // Masamdaki Ürünler (Zimmet) Stoktan Arama Modalı State'leri
+  const [showDeskStockModal, setShowDeskStockModal] = useState(false);
+  const [deskStockSearchQuery, setDeskStockSearchQuery] = useState('');
+  const [deskStockCategory, setDeskStockCategory] = useState('ALL');
+  const [deskStockBranchFilter, setDeskStockBranchFilter] = useState('ALL');
+
+  // Stok Sayfası Şube Filtresi
+  const [stockBranchFilter, setStockBranchFilter] = useState('ALL');
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
   const [newBranchData, setNewBranchData] = useState({ name: '', city: 'İstanbul', address: '', phone: '' });
   const [hourlyTraffic, setHourlyTraffic] = useState([]);
@@ -1545,7 +1569,145 @@ export default function Home() {
     }
   };
 
-  // Müşteri Seansı Başlatma
+  // ==========================================
+  // HIZLI SEPET, MASAYA ALMA & TOPLU SATIŞ AKSİYONLARI
+  // ==========================================
+
+  // HIZLI SEPETE AT
+  const handleQuickAddToCart = async (product) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/cart/quick-add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ product_id: product.id })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCartCount(data.total_items || 1);
+        setCartToastMsg(`🛒 '${product.name}' sepete eklendi! (Toplam: ${data.total_items} ürün)`);
+        setTimeout(() => setCartToastMsg(''), 4000);
+        fetchActiveCartSummary();
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Sepete eklenirken hata oluştu');
+      }
+    } catch (e) {
+      console.error('Sepete ekleme hatası:', e);
+    }
+  };
+
+  // STOKTAN MASAYA (ZİMMETE) AL
+  const handleTakeToDesk = async (product) => {
+    if (!token) {
+      alert('Masaya ürün almak için oturum açmalısınız.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/products/${product.id}/take-to-desk`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        setCartToastMsg(`🪑 '${product.name}' masanıza (zimmetinize) alındı.`);
+        setTimeout(() => setCartToastMsg(''), 4000);
+        fetchProducts();
+        fetchSlots();
+        setShowDeskStockModal(false);
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Masaya alma başarısız');
+      }
+    } catch (e) {
+      console.error('Masaya alma hatası:', e);
+    }
+  };
+
+  // MASADAKİ ÜRÜNÜ VİTRİNE / STOKA İADE ET
+  const handleReturnFromDesk = async (product) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/products/${product.id}/return-to-shelf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        setCartToastMsg(`↩️ '${product.name}' vitrine / stoka iade edildi.`);
+        setTimeout(() => setCartToastMsg(''), 4000);
+        fetchProducts();
+        fetchSlots();
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'İade işlemi başarısız');
+      }
+    } catch (e) {
+      console.error('İade hatası:', e);
+    }
+  };
+
+  // AKTİF SEPET DETAYLARINI GETİR
+  const fetchActiveCartSummary = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/cart/active`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const cart = await res.json();
+        setActiveCartData(cart);
+        const count = cart.items ? cart.items.filter(i => !i.is_sold).reduce((acc, it) => acc + (it.quantity || 1), 0) : 0;
+        setCartCount(count);
+      }
+    } catch (e) {}
+  };
+
+  // SEPETTEKİ ÜRÜNLERİ MÜŞTERİYE TOPLU SAT (BULK CHECKOUT)
+  const handleBulkCheckout = async () => {
+    if (!token || !activeCartData) return;
+    setBulkCheckoutLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/cart/${activeCartData.id}/convert-to-sale`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          payment_method: bulkCheckoutPaymentMethod,
+          customer_name: bulkCheckoutCustomerName || 'Müşteri',
+          customer_phone: bulkCheckoutCustomerPhone || null
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCartToastMsg(`🎉 Tebrikler! ${data.sales?.length || 0} adet mücevher toplu olarak satıldı ve sisteme işlendi!`);
+        setShowBulkCheckoutModal(false);
+        setShowQuickCartModal(false);
+        setCartCount(0);
+        setActiveCartData(null);
+        setBulkCheckoutCustomerName('');
+        setBulkCheckoutCustomerPhone('');
+        fetchSales();
+        fetchProducts();
+        fetchSlots();
+        fetchAnalytics();
+        setTimeout(() => setCartToastMsg(''), 6000);
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Toplu satış gerçekleştirilemedi');
+      }
+    } catch (e) {
+      alert('Hata: ' + e.message);
+    } finally {
+      setBulkCheckoutLoading(false);
+    }
+  };
   const handleStartServiceSession = async (custName = "Müşteri") => {
     if (!token) return;
     try {
@@ -2713,6 +2875,22 @@ export default function Home() {
               )}
             </button>
 
+            {/* 7. MÜŞTERİ SEPETİ & HİZMET SİSTEMİ */}
+            <button
+              onClick={() => { setActiveTab('customer_cart'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
+                activeTab === 'customer_cart'
+                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
+                  : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShoppingCart className="w-4 h-4 text-amber-400" />
+                <span>Müşteri Sepeti &amp; Hizmet</span>
+              </div>
+              <span className="text-[10px] font-mono bg-amber-400/20 text-amber-300 px-1 rounded">Servis</span>
+            </button>
+
 
 
             {/* PATRON & YÖNETİCİ BİLGİ EKRANI (VIP) */}
@@ -2765,6 +2943,42 @@ export default function Home() {
                   <span>Personel &amp; Yetkiler (RBAC)</span>
                 </div>
                 <span className="text-[10px] font-mono bg-amber-400/20 text-amber-300 px-1 rounded">Admin</span>
+              </button>
+            )}
+
+            {/* FIRMA PROFILI & e-FATURA (YALNIZCA ADMIN) */}
+            {currentUser?.role === 'ADMIN' && (
+              <button
+                onClick={() => { setActiveTab('company_profile'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
+                  activeTab === 'company_profile'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md'
+                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Building2 className="w-4 h-4 text-emerald-400" />
+                  <span>Firma Profili &amp; e-Fatura</span>
+                </div>
+                <span className="text-[10px] font-mono bg-emerald-400/20 text-emerald-300 px-1 rounded">Admin</span>
+              </button>
+            )}
+
+            {/* e-FATURA & e-ARŞİV LİSTESİ (YALNIZCA ADMIN) */}
+            {currentUser?.role === 'ADMIN' && (
+              <button
+                onClick={() => { setActiveTab('invoice_list'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
+                  activeTab === 'invoice_list'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md'
+                    : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                  <span>e-Fatura &amp; e-Arşiv Listesi</span>
+                </div>
+                <span className="text-[10px] font-mono bg-indigo-400/20 text-indigo-300 px-1 rounded">Admin</span>
               </button>
             )}
 
@@ -2973,8 +3187,11 @@ export default function Home() {
                 {activeTab === 'patron_dashboard' && '👑 Patron & Yönetici Bilgi Ekranı (Performans & Denetim)'}
                 {activeTab === 'stock_locations' && 'Stok & Fiziksel Konum Takibi (Kasa / Tabla / Askı)'}
                 {activeTab === 'crm' && 'Müşteri CRM, Kapora & Sertifika'}
+                {activeTab === 'customer_cart' && '🛒 Müşteri Sepeti & Hizmet Sistemi'}
                 {activeTab === 'staff_roles' && 'Personel & Mağaza Yetkileri (RBAC)'}
                 {activeTab === 'staff_team' && 'Mağaza Ekibim'}
+                {activeTab === 'company_profile' && '🏢 Firma Profili & e-Fatura Ayarları'}
+                {activeTab === 'invoice_list' && '📄 e-Fatura & e-Arşiv Listesi'}
                 {activeTab === 'sessions_analytics' && 'Hizmet Seans Analizi & Eksik Modeller'}
                 {activeTab === 'daily_report' && '📊 Satış, Ciro & Finansal Raporlama Dashboard'}
                 {activeTab === 'capital_inventory' && 'Has Altın & Sermaye Raporu'}
@@ -3023,6 +3240,28 @@ export default function Home() {
                 <span className="hidden md:inline">Müşteri Seansı</span>
               </button>
             )}
+
+            {/* MÜŞTERİ SEPETİ (TOPLU SATIŞ MODÜLÜ) */}
+            <button
+              onClick={() => {
+                fetchActiveCartSummary();
+                setShowQuickCartModal(true);
+              }}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 active:scale-95 relative ${
+                cartCount > 0
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500 shadow-lg shadow-amber-500/20 animate-pulse'
+                  : 'bg-zinc-900/80 text-zinc-300 border-zinc-700 hover:text-white hover:border-amber-500/50'
+              }`}
+              title="Müşteri Sepeti & Toplu Satış"
+            >
+              <ShoppingCart className="w-3.5 h-3.5 text-amber-400" />
+              <span>Sepet</span>
+              {cartCount > 0 && (
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center -ml-0.5">
+                  {cartCount}
+                </span>
+              )}
+            </button>
 
             {/* HIZLI KASA / SATIŞ BUTONU (HARİCİ POS / MANUEL) */}
             <button
@@ -3476,13 +3715,21 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Seans Kronometresi ve Bitir Butonu */}
-              <div className="flex items-center gap-3">
+              {/* Seans Kronometresi, Stoktan Ürün Ekle ve Bitir Butonları */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  onClick={() => setShowDeskStockModal(true)}
+                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 hover:brightness-110 flex items-center gap-1.5 transition active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Stoktan Masama Ürün Al</span>
+                </button>
+
                 {activeServiceSession ? (
                   <div className="flex items-center gap-2 bg-[#0e1017] p-2 rounded-lg border border-[#242938]">
                     <Clock className="w-4 h-4 text-emerald-400 animate-spin" />
                     <span className="text-xs font-mono font-bold text-white">
-                      Hizmet Süresi: <strong className="text-emerald-400">{formatTimer(sessionSeconds)}</strong>
+                      Hizmet: <strong className="text-emerald-400">{formatTimer(sessionSeconds)}</strong>
                     </span>
                     <button
                       onClick={() => {
@@ -3491,7 +3738,7 @@ export default function Home() {
                       }}
                       className="btn-gold text-xs py-1 px-3"
                     >
-                      Hizmeti Tamamla & Not Düş
+                      Seansı Bitir
                     </button>
                   </div>
                 ) : (
@@ -3557,25 +3804,33 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Masadaki Ürün Aksiyonları: Satış Yap veya Vitrine İade Et */}
-                    <div className="pt-3 border-t border-[#242938] grid grid-cols-2 gap-2 mt-3">
+                    {/* Masadaki Ürün Aksiyonları: Sepete At, Satış Yap veya Vitrine İade Et */}
+                    <div className="pt-3 border-t border-[#242938] grid grid-cols-3 gap-1.5 mt-3">
+                      <button
+                        onClick={() => handleQuickAddToCart(item)}
+                        className="px-2 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95"
+                        title="Toplu satış için sepete ekle"
+                      >
+                        <ShoppingCart className="w-3 h-3" />
+                        <span>Sepete At</span>
+                      </button>
                       <button
                         onClick={() => {
                           setSelectedProductForSale(item);
                           setShowSaleModal(true);
                         }}
-                        className="btn-gold justify-center text-xs py-1.5"
+                        className="btn-gold justify-center text-[11px] py-1.5 px-2"
                       >
-                        <ShoppingBag className="w-3.5 h-3.5" />
-                        <span>Satışını Yap</span>
+                        <ShoppingBag className="w-3 h-3" />
+                        <span>Hemen Sat</span>
                       </button>
                       <button
                         onClick={() => handleReturnToRack(item.id)}
-                        className="btn-secondary justify-center text-xs py-1.5 text-slate-300 hover:text-white"
+                        className="btn-secondary justify-center text-[11px] py-1.5 px-1.5 text-slate-300 hover:text-white"
                         title="Ürünü vitrindeki askısına geri koy"
                       >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Vitrine Geri Koy</span>
+                        <RotateCcw className="w-3 h-3" />
+                        <span>İade Et</span>
                       </button>
                     </div>
                   </div>
@@ -3922,26 +4177,44 @@ export default function Home() {
 
             {/* FİLTRELEME & ARAMA ÇUBUĞU */}
             <div className="bg-[#12141c] border border-[#242938] p-4 rounded-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              {/* Konum Tipi Sekmeleri */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-                {[
-                  { id: 'ALL', label: 'Tüm Konumlar' },
-                  { id: 'Askı', label: '📍 Askılar' },
-                  { id: 'Tabla', label: '🏷️ Tablalar' },
-                  { id: 'Kasa', label: '🔐 Kasalar' }
-                ].map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => setStockLocationFilterType(type.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-                      stockLocationFilterType === type.id
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                        : 'bg-[#181b26] text-slate-400 hover:text-white hover:bg-[#202534]'
-                    }`}
+              {/* Şube Seçici & Konum Tipi Sekmeleri */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-[#0e1017] px-2.5 py-1 rounded-lg border border-[#242938]">
+                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">🏪 Şube:</span>
+                  <select
+                    value={stockBranchFilter}
+                    onChange={(e) => setStockBranchFilter(e.target.value)}
+                    className="bg-transparent text-white font-semibold text-xs focus:outline-none cursor-pointer"
                   >
-                    {type.label}
-                  </button>
-                ))}
+                    <option value="ALL" className="bg-[#12141c] text-white">Tüm Şubelerim</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id} className="bg-[#12141c] text-white">
+                        📍 {b.name} ({b.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1 overflow-x-auto">
+                  {[
+                    { id: 'ALL', label: 'Tüm Konumlar' },
+                    { id: 'Askı', label: '📍 Askılar' },
+                    { id: 'Tabla', label: '🏷️ Tablalar' },
+                    { id: 'Kasa', label: '🔐 Kasalar' }
+                  ].map(type => (
+                    <button
+                      key={type.id}
+                      onClick={() => setStockLocationFilterType(type.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+                        stockLocationFilterType === type.id
+                          ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                          : 'bg-[#181b26] text-slate-400 hover:text-white hover:bg-[#202534]'
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Arama Kutusu */}
@@ -3949,7 +4222,7 @@ export default function Home() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Ürün adı, barkod, RFID veya konum etiketi ara..."
+                  placeholder="Ürün adı, barkod, ayar veya konum ara..."
                   value={stockSearchQuery}
                   onChange={(e) => setStockSearchQuery(e.target.value)}
                   className="w-full bg-[#181b26] border border-[#2a3042] rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -3961,18 +4234,26 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {products
                 .filter(p => {
+                  // Şube Filtresi
+                  if (stockBranchFilter !== 'ALL' && String(p.branch_id) !== String(stockBranchFilter)) {
+                    return false;
+                  }
+                  // Konum Tipi Filtresi
                   if (stockLocationFilterType !== 'ALL') {
                     if (stockLocationFilterType === 'Kasa' && p.location_type !== 'Kasa' && p.slot_id !== null) return false;
                     if (stockLocationFilterType === 'Askı' && p.slot_type !== 'Askı') return false;
                     if (stockLocationFilterType === 'Tabla' && p.slot_type !== 'Tabla') return false;
                   }
+                  // Metin Arama
                   if (stockSearchQuery) {
                     const q = stockSearchQuery.toLowerCase();
                     const matchName = p.name?.toLowerCase().includes(q);
                     const matchBarcode = p.barcode?.toLowerCase().includes(q);
+                    const matchCategory = p.category?.toLowerCase().includes(q);
+                    const matchPurity = p.purity?.toLowerCase().includes(q);
                     const matchLocation = (p.location_label || '').toLowerCase().includes(q);
                     const matchBranch = (p.branch_name || '').toLowerCase().includes(q);
-                    return matchName || matchBarcode || matchLocation || matchBranch;
+                    return matchName || matchBarcode || matchCategory || matchPurity || matchLocation || matchBranch;
                   }
                   return true;
                 })
@@ -4051,53 +4332,61 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* Aksiyon Butonları */}
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#202534]">
-                        <button
-                          onClick={() => openProductDetailModal(product)}
-                          className="btn-secondary text-[11px] py-1.5 px-2 flex items-center justify-center gap-1 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
-                          title="Ürün Detay & Renk/Boy Varyantları"
-                        >
-                          <Layers className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Varyant & Detay</span>
-                        </button>
+                      {/* Aksiyon Butonları: Hızlı Sepet & Masaya Al + Detay & Satış */}
+                      <div className="space-y-1.5 pt-2 border-t border-[#202534]">
+                        {/* 1. Sıra: Ana İşlem Butonları (Sepet & Masa) */}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            onClick={() => handleQuickAddToCart(product)}
+                            className="px-2 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                            title="Toplu satış için müşterinin sepetine ekle"
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5 text-amber-400" />
+                            <span>🛒 Sepete Ekle</span>
+                          </button>
 
-                        <button
-                          onClick={() => handleGenerateCertificate(product.id)}
-                          className="btn-secondary text-[11px] py-1.5 px-2 flex items-center justify-center gap-1 border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10"
-                          title="Resmi Garanti Sertifikası Yazdır"
-                        >
-                          <Award className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Sertifika QR</span>
-                        </button>
+                          <button
+                            onClick={() => handleTakeToDesk(product)}
+                            className="px-2 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 text-[11px] font-bold flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                            title="Müşteriye denetmek için masama (zimmetime) al"
+                          >
+                            <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>🪑 Masama Al</span>
+                          </button>
+                        </div>
 
-                        <button
-                          onClick={() => {
-                            setReservationFormData(prev => ({
-                              ...prev,
-                              product_id: product.id,
-                              total_agreed_price: calculatedPrice
-                            }));
-                            setShowReservationModal(true);
-                          }}
-                          className="btn-secondary text-[11px] py-1.5 px-2 flex items-center justify-center gap-1 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-                          title="Müşteriye Ayır ve Kapora Al"
-                        >
-                          <Bookmark className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Kapora / Ayır</span>
-                        </button>
+                        {/* 2. Sıra: Detay, Sertifika & POS Satış */}
+                        <div className="grid grid-cols-3 gap-1">
+                          <button
+                            onClick={() => openProductDetailModal(product)}
+                            className="btn-secondary text-[10px] py-1 px-1.5 flex items-center justify-center gap-1 border-slate-700 text-slate-300 hover:text-white"
+                            title="Ürün Detay & Renk/Boy Varyantları"
+                          >
+                            <Layers className="w-3 h-3 text-amber-400" />
+                            <span>Detay</span>
+                          </button>
 
-                        <button
-                          onClick={() => {
-                            setSelectedProductForSale(product);
-                            setShowSaleModal(true);
-                          }}
-                          className="btn-gold text-[11px] py-1.5 px-2 flex items-center justify-center gap-1 font-bold"
-                          title="Doğrudan POS Satışa Gönder"
-                        >
-                          <ShoppingCart className="w-3.5 h-3.5" />
-                          <span>POS Satış</span>
-                        </button>
+                          <button
+                            onClick={() => handleGenerateCertificate(product.id)}
+                            className="btn-secondary text-[10px] py-1 px-1.5 flex items-center justify-center gap-1 border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10"
+                            title="Resmi Garanti Sertifikası Yazdır"
+                          >
+                            <Award className="w-3 h-3 text-indigo-400" />
+                            <span>Sertifika</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setSelectedProductForSale(product);
+                              setShowSaleModal(true);
+                            }}
+                            className="btn-gold text-[10px] py-1 px-1.5 flex items-center justify-center gap-1 font-bold"
+                            title="Doğrudan POS Satışa Gönder"
+                          >
+                            <ShoppingCart className="w-3 h-3" />
+                            <span>Hemen Sat</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -4411,6 +4700,21 @@ export default function Home() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* ================= SEKME: 🛒 MÜŞTERİ SEPETİ & HİZMET SİSTEMİ ================= */}
+        {activeTab === 'customer_cart' && (
+          <CustomerServiceCart
+            currentUser={currentUser}
+            apiBase={API_BASE}
+            token={token}
+            products={products}
+            liveRates={liveRates}
+            onRefresh={() => {
+              fetchAllData();
+              fetchCartMetrics?.();
+            }}
+          />
         )}
 
         {/* ================= SEKME 8: SİSTEM DENETİM GÜNLÜĞÜ (AUDIT LOGS) ================= */}
@@ -6081,6 +6385,25 @@ export default function Home() {
               )}
             </div>
           </div>
+        )}
+
+        {/* ================= SEKME: 🏢 FIRMA PROFILI & e-FATURA AYARLARI (YALNIZCA ADMIN) ================= */}
+        {activeTab === 'company_profile' && currentUser?.role === 'ADMIN' && (
+          <CompanyProfileManager
+            currentUser={currentUser}
+            apiBase={API_BASE}
+            token={token}
+          />
+        )}
+
+        {/* ================= SEKME: 📄 e-FATURA & e-ARŞİV LİSTESİ (YALNIZCA ADMIN) ================= */}
+        {activeTab === 'invoice_list' && currentUser?.role === 'ADMIN' && (
+          <InvoiceManager
+            currentUser={currentUser}
+            apiBase={API_BASE}
+            token={token}
+            salesList={salesList}
+          />
         )}
 
       </main>
@@ -8860,6 +9183,290 @@ export default function Home() {
         liveRates={liveRates}
         onSubmitPurchase={handleCreatePurchase}
       />
+
+      {/* ================= MODAL: STOKTAN MASAMA ÜRÜN AL (ZİMMETLE) ================= */}
+      {showDeskStockModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <Briefcase className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Stoktan Masama Ürün Al (Zimmetle)</h3>
+                  <p className="text-[11px] text-zinc-400">Müşteriye sunmak istediğiniz mücevherleri arayarak masanıza çekin.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDeskStockModal(false)}
+                className="w-7 h-7 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Arama ve Şube Filtresi */}
+            <div className="p-3.5 bg-zinc-900/40 border-b border-zinc-800 flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Ürün adı, barkod, ayar veya kategori ara..."
+                  value={deskStockSearchQuery}
+                  onChange={(e) => setDeskStockSearchQuery(e.target.value)}
+                  autoFocus
+                  className="w-full bg-black/60 border border-zinc-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <select
+                value={deskStockBranchFilter}
+                onChange={(e) => setDeskStockBranchFilter(e.target.value)}
+                className="bg-black/60 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-amber-300 focus:outline-none"
+              >
+                <option value="ALL">🏢 Tüm Şubeler</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ürün Listesi */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 divide-y divide-zinc-900">
+              {products
+                .filter(p => {
+                  if (p.status === 'Satıldı') return false;
+                  if (deskStockBranchFilter !== 'ALL' && String(p.branch_id) !== String(deskStockBranchFilter)) return false;
+                  if (deskStockSearchQuery) {
+                    const q = deskStockSearchQuery.toLowerCase();
+                    return (
+                      p.name?.toLowerCase().includes(q) ||
+                      p.barcode?.toLowerCase().includes(q) ||
+                      p.purity?.toLowerCase().includes(q) ||
+                      p.category?.toLowerCase().includes(q)
+                    );
+                  }
+                  return true;
+                })
+                .slice(0, 50)
+                .map(p => (
+                  <div key={p.id} className="pt-2 first:pt-0 flex items-center justify-between gap-3 hover:bg-zinc-900/50 p-2 rounded-xl transition">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 overflow-hidden">
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Sparkles className="w-4 h-4 text-amber-400/60" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white truncate">{p.name}</div>
+                        <div className="text-[10px] text-zinc-400 font-mono">
+                          {p.purity} • {p.weight_grams}g • {p.barcode} • <span className="text-amber-300">{p.status}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <div className="text-xs font-bold font-mono text-amber-400">{p.price?.toLocaleString('tr-TR')} ₺</div>
+                      </div>
+                      <button
+                        onClick={() => handleTakeToDesk(p)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1 transition active:scale-95 shadow"
+                      >
+                        <span>+ Masama Al</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: HIZLI SEPET & MÜŞTERİYE TOPLU SATIŞ ================= */}
+      {showQuickCartModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Müşteri Alışveriş Sepeti</span>
+                    {cartCount > 0 && (
+                      <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full">
+                        {cartCount} Parça
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">Tek faturada müşteriye toplu satış yapın.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQuickCartModal(false)}
+                className="w-7 h-7 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Sepet İçeriği */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {!activeCartData || !activeCartData.items || activeCartData.items.filter(i => !i.is_sold).length === 0 ? (
+                <div className="text-center py-12 text-zinc-500">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-2 text-zinc-600" />
+                  <div className="text-sm font-bold text-zinc-400">Müşterinin sepeti şu anda boş.</div>
+                  <div className="text-xs text-zinc-500 mt-1">Vitrinden veya stoktan '🛒 Sepete Ekle' butonuna basarak ürün ekleyebilirsiniz.</div>
+                </div>
+              ) : (
+                activeCartData.items.filter(i => !i.is_sold).map((item, idx) => (
+                  <div key={item.id || idx} className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-bold text-white">{item.product_name}</div>
+                      <div className="text-[10px] text-zinc-400 font-mono">
+                        {item.purity} • {item.weight_grams}g • {item.quantity} Adet • Barkod: {item.barcode}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold font-mono text-amber-400">{item.line_total?.toLocaleString('tr-TR')} ₺</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Alt Çubuk & Toplu Satış Aksiyonu */}
+            {activeCartData && activeCartData.items && activeCartData.items.filter(i => !i.is_sold).length > 0 && (
+              <div className="p-4 bg-zinc-900/90 border-t border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400">Toplam Sepet Tutarı:</span>
+                  <span className="text-lg font-black font-mono text-amber-400">
+                    {activeCartData.total_payable_amount?.toLocaleString('tr-TR')} ₺
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setShowQuickCartModal(false);
+                      setActiveTab('customer_cart');
+                    }}
+                    className="btn-secondary text-xs py-2.5 justify-center"
+                  >
+                    Detaylı Hizmet Ekranı
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowQuickCartModal(false);
+                      setShowBulkCheckoutModal(true);
+                    }}
+                    className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:brightness-110 text-black font-black text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
+                  >
+                    <span>💳 Toplu Satış Yap &amp; Fiş Kes</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: MÜŞTERİYE TOPLU SATIŞ VE FİŞ KESME ================= */}
+      {showBulkCheckoutModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                  💳
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Toplu Satış &amp; Fiş Kes</h3>
+                  <div className="text-[11px] text-zinc-400">Sepetteki tüm ürünler tek faturada satılacaktır.</div>
+                </div>
+              </div>
+              <button onClick={() => setShowBulkCheckoutModal(false)} className="text-zinc-400 hover:text-white">✕</button>
+            </div>
+
+            <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-800 flex items-center justify-between">
+              <span className="text-xs text-zinc-400">Ödenecek Toplam Tutar:</span>
+              <span className="text-base font-black font-mono text-amber-400">
+                {activeCartData?.total_payable_amount?.toLocaleString('tr-TR')} ₺
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-300 mb-1">Müşteri Adı Soyadı</label>
+                <input
+                  type="text"
+                  placeholder="Örn: Ahmet Yılmaz"
+                  value={bulkCheckoutCustomerName}
+                  onChange={(e) => setBulkCheckoutCustomerName(e.target.value)}
+                  className="w-full bg-black/60 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-300 mb-1">Müşteri Telefonu</label>
+                <input
+                  type="tel"
+                  placeholder="0532 ..."
+                  value={bulkCheckoutCustomerPhone}
+                  onChange={(e) => setBulkCheckoutCustomerPhone(e.target.value)}
+                  className="w-full bg-black/60 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-300 mb-1">Ödeme / Tahsilat Yöntemi</label>
+                <select
+                  value={bulkCheckoutPaymentMethod}
+                  onChange={(e) => setBulkCheckoutPaymentMethod(e.target.value)}
+                  className="w-full bg-black/60 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                >
+                  <option value="Nakit">💵 Nakit (Elden Tahsilat)</option>
+                  <option value="Kredi Kartı">💳 Kredi Kartı (Harici POS Slipi)</option>
+                  <option value="Banka Havalesi / FAST">🏦 Banka Havalesi / FAST</option>
+                  <option value="Hurda / Ziynet Altın Takası">🪙 Hurda / Ziynet Altın Takası</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={handleBulkCheckout}
+              disabled={bulkCheckoutLoading}
+              className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-black font-black text-xs py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 transition active:scale-95 disabled:opacity-50"
+            >
+              {bulkCheckoutLoading ? (
+                <span>Satış İşleniyor...</span>
+              ) : (
+                <>
+                  <span>Toplu Satışı Tamamla &amp; Fiş Kes</span>
+                  <span>➔</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= SEPET VE MASA BİLDİRİM TOASTI ================= */}
+      {cartToastMsg && (
+        <div className="fixed bottom-6 right-6 z-[99999] animate-in fade-in slide-in-from-bottom-4">
+          <div className="bg-zinc-900 border border-amber-500/50 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold backdrop-blur-md">
+            <span>{cartToastMsg}</span>
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

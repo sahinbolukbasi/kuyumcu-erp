@@ -56,7 +56,7 @@ class Branch(Base):
     phone = Column(String(30), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
     users = relationship("User", back_populates="branch", foreign_keys="User.branch_id")
     products = relationship("Product", back_populates="branch")
     sales = relationship("Sale", back_populates="branch")
@@ -108,8 +108,9 @@ class Product(Base):
     additional_images_json = Column(Text, nullable=True) # Ek görseller JSON dizisi
     care_instructions = Column(Text, default="Parfüm ve kimyasallardan uzak tutunuz. Ilık sabunlu su ve yumuşak mikrofiber bezle temizleyiniz. Her yıl mağazamızda ücretsiz cila ve taş tırnak kontrolü yaptırabilirsiniz.")
     
-    # Şube
+    # Şube & Firma İzolasyonu (Tenant)
     branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
 
     # Hangi askıda/tablada asılı? (Bir askıda birden fazla ürün olabilir)
     slot_id = Column(Integer, ForeignKey("rack_slots.id"), nullable=True)
@@ -174,6 +175,51 @@ class CustomerReservation(Base):
     staff = relationship("User")
 
 
+class IoTDevice(Base):
+    """IoT Fiziksel Cihaz - Pico W / ESP32 / ESP8266 vitrin sensör cihazı"""
+    __tablename__ = "iot_devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String(50), unique=True, index=True, nullable=False)  # PICO_VITRIN_01
+    device_type = Column(String(30), default="PICO_W")  # PICO_W, ESP32, ESP8266, CUSTOM
+    mac_address = Column(String(30), unique=True, index=True, nullable=True)  # Donanım MAC
+    firmware_version = Column(String(30), default="2.1.0-Enterprise")
+
+    # Kimlik Bilgileri
+    label = Column(String(100), nullable=False, default="Vitrin Cihazı")
+    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    location_desc = Column(String(200), nullable=True)  # Fiziksel konum
+
+    # Bağlantı
+    ip_address = Column(String(50), default="192.168.1.100")
+    port = Column(Integer, default=80)
+    wifi_ssid = Column(String(50), nullable=True)
+    wifi_rssi = Column(Integer, default=-60)
+
+    # Durum
+    is_online = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    status = Column(String(30), default="INACTIVE")  # ACTIVE, INACTIVE, MAINTENANCE
+    last_ping = Column(DateTime, nullable=True)
+    battery_level = Column(Integer, nullable=True)  # Pil seviyesi (0-100)
+
+    # Güvenlik
+    auth_token = Column(String(128), nullable=True)  # Cihaz eşleştirme token'ı
+    paired_at = Column(DateTime, nullable=True)  # Eşleştirme tarihi
+    paired_by = Column(String(100), nullable=True)  # Kim eşleştirdi
+
+    # İstatistik
+    total_heartbeats = Column(Integer, default=0)
+    total_alarms = Column(Integer, default=0)
+    last_alarm_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    branch = relationship("Branch", foreign_keys=[branch_id])
+    slots = relationship("RackSlot", back_populates="iot_device_rel", foreign_keys="RackSlot.iot_device_id")
+
+
 class RackSlot(Base):
     __tablename__ = "rack_slots"
 
@@ -184,6 +230,7 @@ class RackSlot(Base):
     group_name = Column(String(100), default="Ana Vitrin") # Ana Vitrin, Yüzük Tablası A, Bilezik Standı, Çelik Kasa
     location_code = Column(String(50), nullable=True) # Örn: NTS-TBL02-ASK04
     device_id = Column(String(50), default="DEVICE_01")
+    iot_device_id = Column(Integer, ForeignKey("iot_devices.id"), nullable=True)  # Bağlı IoT cihazı
     ip_address = Column(String(50), default="192.168.1.100")
     port = Column(Integer, default=80)
     is_online = Column(Boolean, default=True)
@@ -199,6 +246,7 @@ class RackSlot(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     branch = relationship("Branch", back_populates="slots")
+    iot_device_rel = relationship("IoTDevice", back_populates="slots", foreign_keys=[iot_device_id])
     # Bir askıda birden fazla ürün ilişkisi
     products = relationship("Product", back_populates="slot")
     alerts = relationship("SecurityAlert", back_populates="slot")
@@ -248,8 +296,9 @@ class Sale(Base):
     profit_amount = Column(Float, default=0.0)
     profit_margin_percent = Column(Float, default=0.0)
 
-    # Şube
+    # Şube & Firma İzolasyonu (Tenant)
     branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
 
     # İki Kişi Kuralı (Yüksek Tutar Çoklu Doğrulama)
     is_two_man_approved = Column(Boolean, default=False)
@@ -602,3 +651,348 @@ class TenantUsageMetric(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     tenant = relationship("TenantCompany", back_populates="usage_metrics")
+
+
+# =========================================================================
+# e-FATURA & e-ARŞİV ENTEGRASYON MODELLERİ
+# =========================================================================
+
+class CompanyProfile(Base):
+    """Firma Profili - e-Fatura/e-Arşiv için gerekli şirket bilgileri ve logo"""
+    __tablename__ = "company_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True, default=1)
+
+    # Firma Bilgileri
+    company_title = Column(String(200), nullable=False, default="Golden Guard Sarrafiye & Mücevherat A.Ş.")
+    tax_office = Column(String(100), nullable=False, default="İstanbul Vergi Dairesi")
+    tax_number = Column(String(20), nullable=False, default="4820194821")
+    mersis_no = Column(String(50), nullable=True, default="")
+    central_registration_no = Column(String(50), nullable=True, default="")
+    trade_registry_no = Column(String(50), nullable=True, default="")
+
+    # İletişim
+    address = Column(Text, nullable=False, default="Kapalıçarşı Kalpakçılar Cad. No:42, Fatih / İstanbul")
+    phone = Column(String(30), nullable=False, default="0212 522 10 20")
+    email = Column(String(100), nullable=False, default="erdem@goldenguard.uk")
+    website = Column(String(100), nullable=True, default="")
+
+    # Logo (Base64 olarak saklanır)
+    logo_base64 = Column(Text, nullable=True)
+    logo_mime_type = Column(String(30), nullable=True, default="image/png")
+
+    # e-Fatura/e-Arşiv Entegratör Ayarları
+    integrator_type = Column(String(30), default="MANUAL")  # MANUAL, KOLAYSOFT, LOGO, MIKRO, IZIBIZ
+    integrator_api_url = Column(String(255), nullable=True)
+    integrator_api_key = Column(String(255), nullable=True)
+    integrator_api_secret = Column(String(255), nullable=True)
+    integrator_username = Column(String(100), nullable=True)
+    integrator_password = Column(String(255), nullable=True)
+
+    e_invoice_active = Column(Boolean, default=True)
+    e_archive_active = Column(Boolean, default=True)
+    sandbox_mode = Column(Boolean, default=True)
+
+    default_payment_term_days = Column(Integer, default=7)
+    default_currency = Column(String(10), default="TRY")
+    default_language = Column(String(10), default="TR")
+
+    invoice_footer_note = Column(Text, nullable=True, default="Bu belge Golden Guard ERP sistemi tarafından oluşturulmuştur. 3065 sayılı KDV Kanunu Madde 17/4-g gereği külçe altın ve has altın bedeli KDV'den istisnadır. Yalnızca işçilik bedeli üzerinden %20 KDV hesaplanmıştır.")
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class EInvoice(Base):
+    """e-Fatura (UBL-TR) Kayıtları - Tüzel/Vergi No'lu alıcılara kesilen faturalar"""
+    __tablename__ = "e_invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_uuid = Column(String(50), unique=True, index=True, nullable=False)
+    invoice_number = Column(String(50), unique=True, index=True, nullable=False)
+    profile_id = Column(String(20), default="EINVOICE")
+
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+    sale_invoice_no = Column(String(50), nullable=True)
+
+    # Gönderen (Satıcı)
+    supplier_title = Column(String(200), nullable=False)
+    supplier_tax_office = Column(String(100), nullable=False)
+    supplier_tax_number = Column(String(20), nullable=False)
+    supplier_address = Column(Text, nullable=False)
+
+    # Alıcı
+    customer_title = Column(String(200), nullable=False)
+    customer_tax_office = Column(String(100), nullable=True)
+    customer_tax_number = Column(String(20), nullable=True)
+    customer_id_number = Column(String(20), nullable=True)
+    customer_address = Column(Text, nullable=True)
+    customer_email = Column(String(100), nullable=True)
+
+    invoice_date = Column(DateTime, default=datetime.datetime.utcnow)
+    payment_term_days = Column(Integer, default=7)
+    currency = Column(String(10), default="TRY")
+    currency_rate = Column(Float, default=1.0)
+
+    total_gross_amount = Column(Float, default=0.0)
+    total_vat_amount = Column(Float, default=0.0)
+    total_vat_exempt_amount = Column(Float, default=0.0)
+    total_payable_amount = Column(Float, default=0.0)
+
+    status = Column(String(30), default="DRAFT")  # DRAFT, SENT, ACCEPTED, REJECTED, CANCELED
+    integrator_status = Column(String(50), nullable=True)
+    integrator_response = Column(Text, nullable=True)
+
+    xml_content = Column(Text, nullable=True)
+    pdf_path = Column(String(255), nullable=True)
+    html_content = Column(Text, nullable=True)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    sale = relationship("Sale", foreign_keys=[sale_id])
+
+
+class EArchiveInvoice(Base):
+    """e-Arşiv Fatura Kayıtları - Bireysel (TC No'lu) alıcılara kesilen faturalar"""
+    __tablename__ = "e_archive_invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_number = Column(String(50), unique=True, index=True, nullable=False)
+    invoice_uuid = Column(String(50), unique=True, index=True, nullable=False)
+
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+    sale_invoice_no = Column(String(50), nullable=True)
+
+    supplier_title = Column(String(200), nullable=False)
+    supplier_tax_office = Column(String(100), nullable=False)
+    supplier_tax_number = Column(String(20), nullable=False)
+
+    customer_name = Column(String(120), nullable=False)
+    customer_id_number = Column(String(20), nullable=True)
+    customer_email = Column(String(100), nullable=True)
+    customer_phone = Column(String(30), nullable=True)
+
+    invoice_date = Column(DateTime, default=datetime.datetime.utcnow)
+    currency = Column(String(10), default="TRY")
+    delivery_type = Column(String(30), default="EMAIL")  # EMAIL, PRINT, KEP
+
+    total_gross_amount = Column(Float, default=0.0)
+    total_vat_amount = Column(Float, default=0.0)
+    total_vat_exempt_amount = Column(Float, default=0.0)
+    total_payable_amount = Column(Float, default=0.0)
+
+    status = Column(String(30), default="DRAFT")  # DRAFT, SENT, PRINTED, CANCELED
+    integrator_status = Column(String(50), nullable=True)
+
+    xml_content = Column(Text, nullable=True)
+    pdf_path = Column(String(255), nullable=True)
+    html_content = Column(Text, nullable=True)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    sale = relationship("Sale", foreign_keys=[sale_id])
+
+
+class InvoiceItem(Base):
+    """Fatura Kalemleri - Hem e-Fatura hem e-Arşiv için ortak kalem tablosu"""
+    __tablename__ = "invoice_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_type = Column(String(20), nullable=False)  # EINVOICE, EARCHIVE
+    invoice_id = Column(Integer, nullable=False)
+
+    line_number = Column(Integer, default=1)
+    item_name = Column(String(200), nullable=False)
+    item_code = Column(String(50), nullable=True)
+    unit_type = Column(String(20), default="ADET")  # ADET, GRAM, KG, M2
+    quantity = Column(Float, default=1.0)
+    unit_price = Column(Float, default=0.0)
+
+    vat_rate = Column(Float, default=20.0)
+    vat_amount = Column(Float, default=0.0)
+    is_vat_exempt = Column(Boolean, default=False)
+
+    # Altın Detayları
+    gold_purity = Column(String(20), nullable=True)
+    gold_weight_grams = Column(Float, nullable=True)
+    gold_labor_cost = Column(Float, default=0.0)
+
+    line_total = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+# =========================================================================
+# MÜŞTERİ SEPETİ & HİZMET SİSTEMİ
+# =========================================================================
+
+class CustomerCart(Base):
+    """Müşteri Sepeti - Satış danışmanı müşteri için ürünleri sepete ekler"""
+    __tablename__ = "customer_carts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_code = Column(String(30), unique=True, index=True, nullable=False)  # SEP-20260919-XXXX
+
+    # İlişkiler
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(120), nullable=True)
+    customer_phone = Column(String(30), nullable=True)
+    customer_email = Column(String(100), nullable=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Satış danışmanı
+    user_name = Column(String(100), nullable=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
+
+    # Servis Seansı (opsiyonel)
+    session_id = Column(Integer, ForeignKey("service_sessions.id"), nullable=True)
+
+    # Sepet Durumu
+    status = Column(String(30), default="ACTIVE")  # ACTIVE, CONVERTED, ABANDONED, CLOSED
+    service_type = Column(String(30), default="SHOWROOM")  # SHOWROOM, CONSULTATION, REPAIR, RESERVATION
+
+    # Maliyet (Canlı kur ile hesaplanır)
+    total_gross_amount = Column(Float, default=0.0)  # Ürün toplamı (KDV hariç)
+    total_vat_amount = Column(Float, default=0.0)
+    total_vat_exempt_amount = Column(Float, default=0.0)  # Altın KDV istisnası
+    total_labor_cost = Column(Float, default=0.0)  # Toplam işçilik
+    total_payable_amount = Column(Float, default=0.0)  # Ödenecek toplam
+    gold_rate_at_cart = Column(Float, default=0.0)  # Sepet anındaki has altın kuru
+
+    # Müşteri Notu
+    notes = Column(Text, nullable=True)
+    customer_wish = Column(Text, nullable=True)  # Müşterinin özel isteği
+
+    # Zaman
+    started_at = Column(DateTime, default=datetime.datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+    duration_minutes = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    # İlişkiler
+    customer = relationship("Customer", foreign_keys=[customer_id])
+    staff = relationship("User", foreign_keys=[user_id])
+    branch = relationship("Branch", foreign_keys=[branch_id])
+    session = relationship("ServiceSession", foreign_keys=[session_id])
+    items = relationship("CartItem", back_populates="cart", cascade="all, delete-orphan")
+    reminders = relationship("CustomerReminder", back_populates="cart", cascade="all, delete-orphan")
+
+
+class CartItem(Base):
+    """Sepet Kalemi - Sepete eklenen her bir ürün"""
+    __tablename__ = "cart_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_id = Column(Integer, ForeignKey("customer_carts.id"), nullable=False)
+
+    # Ürün Bilgisi
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    variant_id = Column(Integer, ForeignKey("product_variants.id"), nullable=True)
+    product_name = Column(String(150), nullable=False)
+    barcode = Column(String(50), nullable=True)
+    category = Column(String(50), nullable=True)
+    purity = Column(String(20), nullable=True)
+    weight_grams = Column(Float, default=0.0)
+
+    # Miktar & Fiyat
+    quantity = Column(Integer, default=1)
+    unit_price = Column(Float, default=0.0)  # Birim fiyat (canlı kur bazlı)
+    labor_cost = Column(Float, default=0.0)  # İşçilik
+    vat_rate = Column(Float, default=20.0)
+    vat_amount = Column(Float, default=0.0)
+    is_vat_exempt = Column(Boolean, default=False)
+    discount_amount = Column(Float, default=0.0)
+    line_total = Column(Float, default=0.0)
+
+    # Müşteri Etkileşimi
+    was_shown_to_customer = Column(Boolean, default=True)  # Müşteriye gösterildi mi?
+    customer_reaction = Column(String(50), nullable=True)  # BEGENDI, KARARSIZ, BEGENMEDI, FIYAT_YUKSEK
+    inspection_seconds = Column(Integer, default=0)  # Kaç saniye incelendi
+
+    # Durum
+    is_sold = Column(Boolean, default=False)  # Satıldı mı?
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)  # Hangi satışa ait
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    cart = relationship("CustomerCart", back_populates="items")
+    product = relationship("Product", foreign_keys=[product_id])
+    variant = relationship("ProductVariant", foreign_keys=[variant_id])
+    sale = relationship("Sale", foreign_keys=[sale_id])
+
+
+class CustomerReminder(Base):
+    """Müşteri Hatırlatıcı - Satış danışmanının müşteri için hatırlatma oluşturması"""
+    __tablename__ = "customer_reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_id = Column(Integer, ForeignKey("customer_carts.id"), nullable=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(120), nullable=True)
+    customer_phone = Column(String(30), nullable=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Hatırlatmayı oluşturan
+    user_name = Column(String(100), nullable=True)
+
+    # Hatırlatma Detayı
+    reminder_type = Column(String(30), default="FOLLOW_UP")  # FOLLOW_UP, PRICE_CHECK, STOCK_ARRIVAL, CALL_BACK
+    title = Column(String(200), nullable=False)
+    note = Column(Text, nullable=True)
+
+    # Tarih
+    reminder_date = Column(DateTime, nullable=False)  # Hatırlatma zamanı
+    is_completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    notified = Column(Boolean, default=False)  # Bildirim gönderildi mi?
+
+    # İlişkili ürün
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    product_name = Column(String(150), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    cart = relationship("CustomerCart", back_populates="reminders")
+    customer = relationship("Customer", foreign_keys=[customer_id])
+    staff = relationship("User", foreign_keys=[user_id])
+    product = relationship("Product", foreign_keys=[product_id])
+
+
+class CustomerDemand(Base):
+    """Müşteri Talebi - Mağazada bulunamayan / özel istenen modeller"""
+    __tablename__ = "customer_demands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_id = Column(Integer, ForeignKey("customer_carts.id"), nullable=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(120), nullable=True)
+    customer_phone = Column(String(30), nullable=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_name = Column(String(100), nullable=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+
+    # Talep Detayı
+    requested_model = Column(String(200), nullable=False)  # Örn: 14K Baget Taşlı Kelepçe Bilezik
+    category = Column(String(50), default="Bilezik")
+    purity = Column(String(20), default="22K")
+    weight_grams = Column(Float, nullable=True)
+    approx_budget = Column(Float, nullable=True)  # Tahmini bütçe
+    is_urgent = Column(Boolean, default=False)  # Acil mi?
+
+    # Durum
+    status = Column(String(30), default="PENDING")  # PENDING, FOUND, ORDERED, CANCELLED
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    cart = relationship("CustomerCart", foreign_keys=[cart_id])
+    customer = relationship("Customer", foreign_keys=[customer_id])
+    staff = relationship("User", foreign_keys=[user_id])
+    branch = relationship("Branch", foreign_keys=[branch_id])

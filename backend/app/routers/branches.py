@@ -11,16 +11,25 @@ router = APIRouter(prefix="/api/v1/branches", tags=["Çoklu Şube, Muhasebe Ente
 
 
 @router.get("", response_model=List[schemas.BranchOut])
-def list_branches(db: Session = Depends(get_db)):
-    """Aktif kuyumcu şubeleri"""
-    branches = db.query(models.Branch).filter(models.Branch.is_active == True).all()
-    if not branches:
+def list_branches(
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    """Aktif kuyumcu şubeleri (Firma İzolasyonlu)"""
+    query = db.query(models.Branch).filter(models.Branch.is_active == True)
+    if current_user and hasattr(current_user, 'tenant_id') and current_user.tenant_id:
+        query = query.filter(models.Branch.tenant_id == current_user.tenant_id)
+
+    branches = query.all()
+    if not branches and (not current_user or current_user.tenant_id == 1):
         # Varsayılan şubeler oluştur
-        b1 = models.Branch(name="Kapalıçarşı Merkez Mağaza", city="İstanbul", address="Kapalıçarşı Kalpakçılar Cad. No:42, Fatih", phone="0212 522 10 20")
-        b2 = models.Branch(name="Nişantaşı VIP Showroom", city="İstanbul", address="Abdi İpekçi Cad. No:18, Şişli", phone="0212 230 40 50")
-        b3 = models.Branch(name="Bağdat Caddesi Şube", city="İstanbul", address="Bağdat Cad. No:312, Kadıköy", phone="0216 385 60 70")
+        t_id = current_user.tenant_id if current_user and current_user.tenant_id else 1
+        b1 = models.Branch(name="Kapalıçarşı Merkez Mağaza", city="İstanbul", address="Kapalıçarşı Kalpakçılar Cad. No:42, Fatih", phone="0212 522 10 20", tenant_id=t_id)
+        b2 = models.Branch(name="Nişantaşı VIP Showroom", city="İstanbul", address="Abdi İpekçi Cad. No:18, Şişli", phone="0212 230 40 50", tenant_id=t_id)
+        b3 = models.Branch(name="Bağdat Caddesi Şube", city="İstanbul", address="Bağdat Cad. No:312, Kadıköy", phone="0216 385 60 70", tenant_id=t_id)
         db.add_all([b1, b2, b3])
         db.commit()
+        branches = [b1, b2, b3]
     return branches
 
 

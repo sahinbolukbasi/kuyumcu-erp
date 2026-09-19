@@ -10,7 +10,7 @@ import asyncio
 from .database import engine, Base, SessionLocal
 from . import models, iot_service, auth
 from .iot_watchdog import run_iot_watchdog
-from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases, tenants
+from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases, tenants, invoices, cart, devices
 from . import backup_service
 
 from sqlalchemy import text
@@ -22,7 +22,12 @@ def run_sqlite_migrations():
             "ALTER TABLE branches ADD COLUMN region VARCHAR(50) DEFAULT 'Marmara'",
             "ALTER TABLE rack_slots ADD COLUMN location_code VARCHAR(50)",
             "ALTER TABLE rack_slots ADD COLUMN is_active BOOLEAN DEFAULT 1",
-            "ALTER TABLE users ADD COLUMN tenant_id INTEGER DEFAULT 1"
+            "ALTER TABLE users ADD COLUMN tenant_id INTEGER DEFAULT 1",
+            "ALTER TABLE branches ADD COLUMN tenant_id INTEGER DEFAULT 1",
+            "ALTER TABLE products ADD COLUMN tenant_id INTEGER DEFAULT 1",
+            "ALTER TABLE sales ADD COLUMN tenant_id INTEGER DEFAULT 1",
+            "ALTER TABLE customer_carts ADD COLUMN tenant_id INTEGER DEFAULT 1",
+            "ALTER TABLE rack_slots ADD COLUMN iot_device_id INTEGER REFERENCES iot_devices(id)"
         ]:
             try:
                 conn.execute(text(alter_stmt))
@@ -679,6 +684,9 @@ app.include_router(branches.router)
 app.include_router(rates.router)
 app.include_router(purchases.router)
 app.include_router(tenants.router)
+app.include_router(invoices.router)
+app.include_router(cart.router)
+app.include_router(devices.router)
 
 # Otomatik Gece 03:00 Yedekleme Zamanlayıcısını Başlat
 backup_service.run_nightly_backup_scheduler()
