@@ -72,7 +72,11 @@ import {
   X,
   MapPin,
   Calculator,
-  UserPlus
+  UserPlus,
+  Activity,
+  BarChart3,
+  Bookmark,
+  Flame
 } from 'lucide-react';
 
 import ProductPresentationShowcase from './components/ProductPresentationShowcase';
