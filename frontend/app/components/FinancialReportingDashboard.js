@@ -21,11 +21,14 @@ import {
   Percent,
   PieChart,
   ArrowUpRight,
-  Sparkles
+  ArrowDownRight,
+  Sparkles,
+  Scale
 } from 'lucide-react';
 
 export default function FinancialReportingDashboard({
   salesList = [],
+  purchasesList = [],
   analytics = {},
   dailyReportsArchive = [],
   currentUser,
@@ -125,6 +128,100 @@ export default function FinancialReportingDashboard({
       staffMap
     };
   }, [filteredSales]);
+
+  // Satın Alınan Altınların Dönem Filtresi ve Toplamları
+  const purchaseMetrics = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfToday.getDate() - 7);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    const filtered = purchasesList.filter(p => {
+      const pDate = p.created_at ? new Date(p.created_at) : new Date();
+      if (timeframe === 'TODAY' && pDate < startOfToday) return false;
+      if (timeframe === 'WEEK' && pDate < startOfWeek) return false;
+      if (timeframe === 'MONTH' && pDate < startOfMonth) return false;
+      if (timeframe === 'YEAR' && pDate < startOfYear) return false;
+      return true;
+    });
+
+    let weight = 0;
+    let pure = 0;
+    let paid = 0;
+    const staffPurchasesMap = {};
+
+    filtered.forEach(p => {
+      const w = parseFloat(p.weight_grams) || 0;
+      const pu = parseFloat(p.pure_gold_grams) || 0;
+      const amt = parseFloat(p.total_amount_paid) || 0;
+
+      weight += w;
+      pure += pu;
+      paid += amt;
+
+      const staff = p.buyer_name || 'Yetkili Personel';
+      if (!staffPurchasesMap[staff]) {
+        staffPurchasesMap[staff] = { count: 0, weight: 0, pure: 0, paid: 0 };
+      }
+      staffPurchasesMap[staff].count += 1;
+      staffPurchasesMap[staff].weight += w;
+      staffPurchasesMap[staff].pure += pu;
+      staffPurchasesMap[staff].paid += amt;
+    });
+
+    return {
+      count: filtered.length,
+      totalWeightGrams: weight,
+      totalPureGoldGrams: pure,
+      totalAmountPaid: paid,
+      staffPurchasesMap
+    };
+  }, [purchasesList, timeframe]);
+
+  // GÜN SONU KARŞILAŞTIRMA (ALINAN vs SATILAN ALTIN)
+  const comparison = useMemo(() => {
+    const soldGrams = summary.totalGrams;
+    const purchasedGrams = purchaseMetrics.totalWeightGrams;
+    const netWeightBalance = purchasedGrams - soldGrams; // Pozitif ise kasaya net altın girdi
+
+    const salesRev = summary.totalRevenue;
+    const purchasesPaid = purchaseMetrics.totalAmountPaid;
+    const netCashFlow = salesRev - purchasesPaid; // Satış Geliri - Alım Ödemesi
+
+    // Personel karşılaştırması
+    const allStaffNames = Array.from(new Set([
+      ...Object.keys(summary.staffMap || {}),
+      ...Object.keys(purchaseMetrics.staffPurchasesMap || {})
+    ]));
+
+    const staffComparison = allStaffNames.map(name => {
+      const s = summary.staffMap[name] || { count: 0, grams: 0, revenue: 0 };
+      const p = purchaseMetrics.staffPurchasesMap[name] || { count: 0, weight: 0, pure: 0, paid: 0 };
+      return {
+        name,
+        salesCount: s.count,
+        salesGrams: s.grams.toFixed(2),
+        salesRevenue: s.revenue,
+        purchasesCount: p.count,
+        purchasesGrams: p.weight.toFixed(2),
+        purchasesPaid: p.paid,
+        netGrams: (p.weight - s.grams).toFixed(2),
+        netCash: s.revenue - p.paid
+      };
+    });
+
+    return {
+      soldGrams: soldGrams.toFixed(2),
+      salesRevenue: salesRev,
+      purchasedGrams: purchasedGrams.toFixed(2),
+      purchasesPaid,
+      netWeightBalance: netWeightBalance.toFixed(2),
+      netCashFlow,
+      staffComparison
+    };
+  }, [summary, purchaseMetrics]);
 
   // Zaman başlığı etiketi
   const timeframeLabels = {
@@ -330,6 +427,152 @@ export default function FinancialReportingDashboard({
             Ortalama Brüt Verim
           </div>
         </div>
+      </div>
+
+      {/* ================= GÜN SONU / DÖNEMSEL ALTIN & KASA DENGESİ (ALINAN vs. SATILAN) ================= */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-[#12141c] via-[#191d2c] to-[#12141c] border border-amber-500/40 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#262c3e] pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <Scale className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>GÜN SONU ALTIN &amp; KASA DENGESİ (ALINAN vs. SATILAN ALTIN)</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
+                  {timeframeLabels[timeframe]}
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Dükkandan satılan altın ile müşteriden satın alınan (hurda/ziynet) altının gramaj, nakit ve personel dengesi.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 KOLONLU KARŞILAŞTIRMA KARTLARI */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          
+          {/* 1. SATILAN ALTIN (ÇIKIŞ) */}
+          <div className="p-4 rounded-xl bg-[#151926] border border-amber-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-amber-400">
+              <span className="flex items-center gap-1.5">
+                <ArrowUpRight className="w-4 h-4 text-amber-400" />
+                DÜKKANDAN SATILAN ALTIN
+              </span>
+              <span className="text-[10px] text-slate-400">{summary.count} Satış</span>
+            </div>
+            <div className="text-2xl font-bold font-display text-white">
+              {comparison.soldGrams} <span className="text-sm font-mono text-amber-400 font-normal">gr</span>
+            </div>
+            <div className="pt-2 border-t border-[#22293d] flex items-center justify-between text-xs">
+              <span className="text-slate-400">Satış Cirosu:</span>
+              <span className="font-mono font-bold text-white">{summary.totalRevenue.toLocaleString('tr-TR')} ₺</span>
+            </div>
+          </div>
+
+          {/* 2. SATIN ALINAN ALTIN (GİRİŞ) */}
+          <div className="p-4 rounded-xl bg-[#151926] border border-emerald-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
+              <span className="flex items-center gap-1.5">
+                <ArrowDownRight className="w-4 h-4 text-emerald-400" />
+                MÜŞTERİDEN ALINAN ALTIN
+              </span>
+              <span className="text-[10px] text-slate-400">{purchaseMetrics.count} Alım</span>
+            </div>
+            <div className="text-2xl font-bold font-display text-white">
+              {comparison.purchasedGrams} <span className="text-sm font-mono text-emerald-400 font-normal">gr</span>
+            </div>
+            <div className="pt-2 border-t border-[#22293d] flex items-center justify-between text-xs">
+              <span className="text-slate-400">Kasadan Ödenen:</span>
+              <span className="font-mono font-bold text-rose-400">{purchaseMetrics.totalAmountPaid.toLocaleString('tr-TR')} ₺</span>
+            </div>
+          </div>
+
+          {/* 3. NET POZİSYON & NAKİT AKIŞI */}
+          <div className="p-4 rounded-xl bg-[#151926] border border-blue-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-blue-400">
+              <span className="flex items-center gap-1.5">
+                <Scale className="w-4 h-4 text-blue-400" />
+                NET FİZİKİ &amp; KASA DENGESİ
+              </span>
+              <span className="text-[10px] text-slate-400">Net Pozisyon</span>
+            </div>
+            <div className="text-2xl font-bold font-display text-white flex items-baseline gap-1">
+              <span className={parseFloat(comparison.netWeightBalance) >= 0 ? 'text-emerald-400' : 'text-amber-400'}>
+                {parseFloat(comparison.netWeightBalance) >= 0 ? `+${comparison.netWeightBalance}` : comparison.netWeightBalance}
+              </span>
+              <span className="text-sm font-mono text-slate-300 font-normal">gr</span>
+              <span className="text-[10px] text-slate-400 ml-1 font-sans">
+                {parseFloat(comparison.netWeightBalance) >= 0 ? '(Kasaya Net Giriş)' : '(Dükkandan Net Çıkış)'}
+              </span>
+            </div>
+            <div className="pt-2 border-t border-[#22293d] flex items-center justify-between text-xs">
+              <span className="text-slate-400">Net Kasa Nakit Akışı:</span>
+              <span className={`font-mono font-bold ${comparison.netCashFlow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {comparison.netCashFlow >= 0 ? `+${comparison.netCashFlow.toLocaleString('tr-TR')}` : comparison.netCashFlow.toLocaleString('tr-TR')} ₺
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* PERSONEL KARŞILAŞTIRMA LİSTESİ */}
+        {comparison.staffComparison.length > 0 && (
+          <div className="pt-2">
+            <div className="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-amber-400" />
+              <span>Personel Bazında Alım ve Satış Karşılaştırması (Kim Ne Sattı? Kim Ne Aldı?)</span>
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-[#242938]">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#10131c] text-slate-400 text-[10px] uppercase border-b border-[#242938]">
+                    <th className="py-2.5 px-3">Personel</th>
+                    <th className="py-2.5 px-3 text-right">Satış (Adet / Gram)</th>
+                    <th className="py-2.5 px-3 text-right">Satış Cirosu</th>
+                    <th className="py-2.5 px-3 text-right">Alım (Adet / Gram)</th>
+                    <th className="py-2.5 px-3 text-right">Alım Gideri</th>
+                    <th className="py-2.5 px-3 text-right">Net Gram Katkısı</th>
+                    <th className="py-2.5 px-3 text-right">Net Nakit Katkısı</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1e2330]">
+                  {comparison.staffComparison.map((st, i) => (
+                    <tr key={i} className="hover:bg-[#181c28]">
+                      <td className="py-2.5 px-3 font-semibold text-white flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{st.name}</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                        {st.salesCount} işlem ({st.salesGrams} gr)
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-400">
+                        {st.salesRevenue.toLocaleString('tr-TR')} ₺
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                        {st.purchasesCount} işlem ({st.purchasesGrams} gr)
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-400">
+                        {st.purchasesPaid.toLocaleString('tr-TR')} ₺
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-white">
+                        <span className={parseFloat(st.netGrams) >= 0 ? 'text-emerald-400' : 'text-slate-300'}>
+                          {parseFloat(st.netGrams) >= 0 ? `+${st.netGrams}` : st.netGrams} gr
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold">
+                        <span className={st.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                          {st.netCash >= 0 ? `+${st.netCash.toLocaleString('tr-TR')}` : st.netCash.toLocaleString('tr-TR')} ₺
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* GRAFİK DAĞILIMLARI (KATEGORİLER & ÖDEME YÖNTEMLERİ) */}

@@ -40,6 +40,7 @@ class Customer(Base):
     sales = relationship("Sale", back_populates="customer_rel")
     reservations = relationship("CustomerReservation", back_populates="customer")
     interests = relationship("CustomerInterest", back_populates="customer")
+    gold_purchases = relationship("GoldPurchase", back_populates="customer_rel")
 
 
 class Branch(Base):
@@ -269,6 +270,43 @@ class Sale(Base):
     second_approver = relationship("User", foreign_keys=[second_approver_id])
     customer_rel = relationship("Customer", back_populates="sales")
     masak_record = relationship("MasakRecord", back_populates="sale", uselist=False)
+
+
+class GoldPurchase(Base):
+    __tablename__ = "gold_purchases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    receipt_no = Column(String(50), unique=True, index=True, nullable=True) # Fiş / Gider Pusula No
+    category = Column(String(50), nullable=False, default="Hurda Altın") # Ziynet, 22K Bilezik, Hurda, 24K Has Külçe vb.
+    item_description = Column(String(200), nullable=False)
+    purity = Column(String(20), nullable=False, default="22K") # 24K, 22K, 18K, 14K vb.
+    weight_grams = Column(Float, nullable=False) # Tartılan brüt gramaj
+    pure_rate_ratio = Column(Float, default=0.916) # Milyem katsayısı
+    pure_gold_grams = Column(Float, nullable=False) # Has altın karşılığı (gr)
+    unit_price_per_gram = Column(Float, nullable=False) # Gram başına ödenen alış fiyatı
+    total_amount_paid = Column(Float, nullable=False) # Kasadan müşteriye ödenen toplam tutar
+    currency = Column(String(10), default="TRY")
+    payment_method = Column(String(50), default="Nakit (Kasa Çıkışı)") # Nakit, Banka Havalesi/FAST, Takas Mahsubu
+    
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(100), default="Müşteri")
+    customer_tc = Column(String(20), nullable=True) # T.C. Kimlik / Pasaport No
+    customer_phone = Column(String(30), nullable=True)
+    
+    # Satın alan personel
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    buyer_name = Column(String(100), default="Yetkili Personel")
+    
+    # Şube ve Depo
+    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    storage_location = Column(String(100), default="Hurda / Çıkma Kasası")
+    notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    customer_rel = relationship("Customer", back_populates="gold_purchases")
+    buyer = relationship("User", foreign_keys=[user_id])
+    branch = relationship("Branch")
 
 
 class InspectionLog(Base):

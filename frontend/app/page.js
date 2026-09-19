@@ -86,6 +86,8 @@ import GoldCurrencyCalculator from './components/GoldCurrencyCalculator';
 import PatronAnalyticsDashboard from './components/PatronAnalyticsDashboard';
 import MultiAlarmManager from './components/MultiAlarmManager';
 import FinancialReportingDashboard from './components/FinancialReportingDashboard';
+import GoldPurchasesView from './components/GoldPurchasesView';
+import GoldPurchaseModal from './components/GoldPurchaseModal';
 
 let API_BASE = 'http://127.0.0.1:8000';
 let WS_URL = 'ws://127.0.0.1:8000/ws/live';
@@ -249,6 +251,12 @@ export default function Home() {
   const [isResettingAlarm, setIsResettingAlarm] = useState(false);
   const [dailyReportsArchive, setDailyReportsArchive] = useState([]);
   const [selectedArchivedReport, setSelectedArchivedReport] = useState(null);
+
+  // Müşteriden Altın Satın Alma (Hurda / Ziynet Alım) State'leri
+  const [goldPurchases, setGoldPurchases] = useState([]);
+  const [purchaseStaffSummary, setPurchaseStaffSummary] = useState([]);
+  const [showGoldPurchaseModal, setShowGoldPurchaseModal] = useState(false);
+  const [purchasesLoading, setPurchasesLoading] = useState(false);
 
   // Satış Filtreleri
   const [salesTimeRange, setSalesTimeRange] = useState('all');
@@ -766,6 +774,56 @@ export default function Home() {
     }
   };
 
+  const fetchPurchases = async () => {
+    if (!token) return;
+    try {
+      setPurchasesLoading(true);
+      const res = await fetch(`${API_BASE}/api/v1/purchases`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setGoldPurchases(await res.json());
+    } catch (e) {
+      console.error("Purchases fetch error", e);
+    } finally {
+      setPurchasesLoading(false);
+    }
+  };
+
+  const fetchPurchaseStaffSummary = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/purchases/staff-summary?time_range=all`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setPurchaseStaffSummary(await res.json());
+    } catch (e) {
+      console.error("Staff purchases summary error", e);
+    }
+  };
+
+  const handleCreatePurchase = async (purchaseData) => {
+    if (!token) throw new Error("Oturum süresi dolmuş.");
+    const res = await fetch(`${API_BASE}/api/v1/purchases`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(purchaseData)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Altın alım işlemi kaydedilemedi.');
+    }
+    const created = await res.json();
+    alert(`✅ ${created.weight_grams} gr ${created.purity} altın alımı başarıyla kaydedildi! (Fiş: ${created.receipt_no})`);
+    fetchPurchases();
+    fetchPurchaseStaffSummary();
+    fetchAnalytics();
+    fetchSystemLogs();
+    return created;
+  };
+
   const handleAcknowledgeAndResetAlarm = async (alertId, notes = '') => {
     if (!token) return;
     setIsResettingAlarm(true);
@@ -1239,6 +1297,8 @@ export default function Home() {
       fetchProfitMargins();
       fetchBranchOverview();
       fetchDailyReportsArchive();
+      fetchPurchases();
+      fetchPurchaseStaffSummary();
       if (['ADMIN', 'MANAGER'].includes(currentUser?.role)) {
         fetchStaffPerformance();
         fetchStaffList();
@@ -2596,6 +2656,24 @@ export default function Home() {
               </div>
             </button>
 
+            {/* 5.1 ALTIN SATIN ALMA & HURDA KASA */}
+            <button
+              onClick={() => { setActiveTab('gold_purchases'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
+                activeTab === 'gold_purchases'
+                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
+                  : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Scale className="w-4 h-4 text-amber-400" />
+                <span>Altın Satın Alma &amp; Hurda Kasa</span>
+              </div>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                {goldPurchases.length} Alım
+              </span>
+            </button>
+
             {/* ALTIN & DÖVİZ HESAPLAMA PORTALI */}
             <button
               onClick={() => { setActiveTab('calculator'); setIsMobileMenuOpen(false); }}
@@ -2886,6 +2964,7 @@ export default function Home() {
                 {activeTab === 'alarms' && '🚨 Vitrin Güvenlik & Çoklu Alarm Yönetim Merkezi'}
                 {activeTab === 'custody' && 'Masamdaki Ürünler (Zimmet)'}
                 {activeTab === 'sales' && (currentUser?.role === 'STAFF' ? 'Satışlarım & Fişler' : 'Kasa & Hızlı POS Satış')}
+                {activeTab === 'gold_purchases' && '🪙 Müşteriden Altın Satın Alma & Hurda Kasa Takibi'}
                 {activeTab === 'calculator' && '🧮 Canlı Altın & Döviz Hesaplama Portalı'}
                 {activeTab === 'patron_dashboard' && '👑 Patron & Yönetici Bilgi Ekranı (Performans & Denetim)'}
                 {activeTab === 'stock_locations' && 'Stok & Fiziksel Konum Takibi (Kasa / Tabla / Askı)'}
@@ -4027,6 +4106,7 @@ export default function Home() {
         {activeTab === 'daily_report' && (
           <FinancialReportingDashboard
             salesList={salesList}
+            purchasesList={goldPurchases}
             analytics={analytics}
             dailyReportsArchive={dailyReportsArchive}
             currentUser={currentUser}
@@ -4036,6 +4116,21 @@ export default function Home() {
               setSelectedSaleForEmail(s);
               setShowEmailModal(true);
             }}
+          />
+        )}
+
+        {/* ================= SEKME: ALTIN SATIN ALMA & HURDA KASA (GERİ ALIM) ================= */}
+        {activeTab === 'gold_purchases' && (
+          <GoldPurchasesView
+            purchases={goldPurchases}
+            staffSummary={purchaseStaffSummary}
+            currentUser={currentUser}
+            onOpenNewPurchaseModal={() => setShowGoldPurchaseModal(true)}
+            onRefresh={() => {
+              fetchPurchases();
+              fetchPurchaseStaffSummary();
+            }}
+            liveRates={liveRates}
           />
         )}
 
@@ -8750,6 +8845,15 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* MÜŞTERİDEN ALTIN SATIN ALMA (HURDA / ZİYNET ALIM) MODALI */}
+      <GoldPurchaseModal
+        isOpen={showGoldPurchaseModal}
+        onClose={() => setShowGoldPurchaseModal(false)}
+        currentUser={currentUser}
+        liveRates={liveRates}
+        onSubmitPurchase={handleCreatePurchase}
+      />
 
       </div>
     </div>

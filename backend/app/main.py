@@ -10,7 +10,7 @@ import asyncio
 from .database import engine, Base, SessionLocal
 from . import models, iot_service, auth
 from .iot_watchdog import run_iot_watchdog
-from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates
+from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases
 
 from sqlalchemy import text
 
@@ -623,6 +623,7 @@ app.include_router(security.router)
 app.include_router(legal.router)
 app.include_router(branches.router)
 app.include_router(rates.router)
+app.include_router(purchases.router)
 
 @app.get("/")
 def health_check():

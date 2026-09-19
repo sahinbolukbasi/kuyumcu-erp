@@ -67,6 +67,16 @@ def get_daily_summary(
             "total_grams_sold": round(sum(s.weight_grams for s in u_sales), 2)
         })
 
+    # Satın Alınan Altınlar (Hurda / Ziynet Geri Alım)
+    purchases_today = db.query(models.GoldPurchase).filter(models.GoldPurchase.created_at >= today_start).all()
+    total_purchased_count = len(purchases_today)
+    total_purchased_grams = round(sum(p.weight_grams for p in purchases_today), 2)
+    total_purchased_pure_grams = round(sum(p.pure_gold_grams for p in purchases_today), 3)
+    total_purchased_paid = round(sum(p.total_amount_paid for p in purchases_today), 2)
+
+    net_gold_balance = round(total_purchased_grams - total_gold_grams_sold, 2)
+    net_cash_flow = round(total_sales_revenue - total_purchased_paid, 2)
+
     return {
         "total_sales_count": total_sales_count,
         "total_sales_revenue": total_sales_revenue,
@@ -77,5 +87,11 @@ def get_daily_summary(
         "active_alerts_count": active_alerts_count,
         "category_sales_breakdown": category_sales_breakdown,
         "most_viewed_products": most_viewed_list,
-        "staff_performances": staff_performances
+        "staff_performances": staff_performances,
+        "total_gold_purchased_count": total_purchased_count,
+        "total_gold_purchased_grams": total_purchased_grams,
+        "total_gold_purchased_pure_grams": total_purchased_pure_grams,
+        "total_gold_purchased_paid": total_purchased_paid,
+        "net_gold_balance_grams": net_gold_balance,
+        "net_cash_flow": net_cash_flow
     }

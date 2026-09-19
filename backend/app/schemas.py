@@ -428,6 +428,89 @@ class SaleOut(BaseModel):
     class Config:
         from_attributes = True
 
+
+# ================= ALTIN SATIN ALMA (HURDA / ZİYNET ALIM) ŞEMALARI =================
+class GoldPurchaseCreate(BaseModel):
+    category: str = "Hurda Altın" # Ziynet / Çeyrek-Ata, 22K Bilezik, 14K/18K Hurda, 24K Has Külçe vb.
+    item_description: str
+    purity: str = "22K" # 24K, 22K, 18K, 14K vb.
+    weight_grams: float
+    pure_rate_ratio: Optional[float] = None
+    pure_gold_grams: Optional[float] = None
+    unit_price_per_gram: float
+    total_amount_paid: Optional[float] = None
+    currency: Optional[str] = "TRY"
+    payment_method: Optional[str] = "Nakit (Kasa Çıkışı)"
+    customer_name: Optional[str] = "Müşteri"
+    customer_tc: Optional[str] = None
+    customer_phone: Optional[str] = None
+    storage_location: Optional[str] = "Hurda / Çıkma Kasası"
+    notes: Optional[str] = None
+    branch_id: Optional[int] = 1
+
+
+class GoldPurchaseOut(BaseModel):
+    id: int
+    receipt_no: Optional[str] = None
+    category: str
+    item_description: str
+    purity: str
+    weight_grams: float
+    pure_rate_ratio: float
+    pure_gold_grams: float
+    unit_price_per_gram: float
+    total_amount_paid: float
+    currency: str
+    payment_method: str
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_tc: Optional[str] = None
+    customer_phone: Optional[str] = None
+    user_id: Optional[int] = None
+    buyer_name: Optional[str] = "Yetkili Personel"
+    branch_id: Optional[int] = 1
+    storage_location: Optional[str] = "Hurda / Çıkma Kasası"
+    notes: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StaffPurchaseSummary(BaseModel):
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    full_name: str
+    role: Optional[str] = "STAFF"
+    total_purchases_count: int = 0
+    total_weight_grams: float = 0.0
+    total_pure_gold_grams: float = 0.0
+    total_amount_paid: float = 0.0
+
+
+class GoldComparisonSummary(BaseModel):
+    time_range: str # today, week, month, year, all
+    
+    # Satılan Altın Verileri
+    sales_count: int = 0
+    sales_total_weight_grams: float = 0.0
+    sales_total_pure_gold_grams: float = 0.0
+    sales_total_revenue: float = 0.0
+    
+    # Satın Alınan Altın Verileri
+    purchases_count: int = 0
+    purchases_total_weight_grams: float = 0.0
+    purchases_total_pure_gold_grams: float = 0.0
+    purchases_total_amount_paid: float = 0.0
+    
+    # Net Denge / Pozisyon
+    net_weight_grams_balance: float = 0.0 # Satın Alınan - Satılan (Pozitif ise kasaya net altın girdi, negatif ise dükkandan net altın çıktı)
+    net_pure_gold_grams_balance: float = 0.0 # Net Has Altın Değişimi
+    net_cash_flow: float = 0.0 # Satış Geliri - Satın Alma Harcaması (Net Kasa Girişi)
+    
+    # Personel Bazlı Karşılaştırmalı Liste
+    staff_breakdown: List[dict] = []
+
 # --- System Audit Log Schemas ---
 class SystemLogCreate(BaseModel):
     level: str = "INFO"
@@ -525,6 +608,13 @@ class DailySummary(BaseModel):
     category_sales_breakdown: dict
     most_viewed_products: List[dict]
     staff_performances: List[StaffPerformance] = []
+    # Alınan Altın & Net Denge
+    total_gold_purchased_count: Optional[int] = 0
+    total_gold_purchased_grams: Optional[float] = 0.0
+    total_gold_purchased_pure_grams: Optional[float] = 0.0
+    total_gold_purchased_paid: Optional[float] = 0.0
+    net_gold_balance_grams: Optional[float] = 0.0
+    net_cash_flow: Optional[float] = 0.0
 
 
 # --- Şube & Stok Transfer Şemaları ---
