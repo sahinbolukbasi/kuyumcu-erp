@@ -16,6 +16,7 @@ import {
   CheckCircle2, 
   Award, 
   Users, 
+  User,
   Clock, 
   Save, 
   Percent,
@@ -51,7 +52,8 @@ export default function FinancialReportingDashboard({
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-    return salesList.filter(s => {
+    const safeSales = Array.isArray(salesList) ? salesList : [];
+    return safeSales.filter(s => {
       const saleDate = s.created_at ? new Date(s.created_at) : new Date();
 
       // Zaman Filtresi
@@ -138,7 +140,8 @@ export default function FinancialReportingDashboard({
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-    const filtered = purchasesList.filter(p => {
+    const safePurchases = Array.isArray(purchasesList) ? purchasesList : [];
+    const filtered = safePurchases.filter(p => {
       const pDate = p.created_at ? new Date(p.created_at) : new Date();
       if (timeframe === 'TODAY' && pDate < startOfToday) return false;
       if (timeframe === 'WEEK' && pDate < startOfWeek) return false;
