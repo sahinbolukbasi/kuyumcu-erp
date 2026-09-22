@@ -13,6 +13,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=sqlite:////app/data/kuyumculuk.db
+      - MASTER_PASSWORD_HASH=pbkdf2_sha256$600000$ec730e443f19395909ed35b54ae5bc0c$fc198c67066318bb7b40679ec8575eede32e68801f9745f96823a174db463308
     deploy:
       resources:
         limits:

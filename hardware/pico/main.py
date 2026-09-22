@@ -1,5 +1,5 @@
 # ==============================================================================
-# 💎 Golden Guard IoT ERP - Kurumsal Raspberry Pi Pico W Donanım Firmware (v2.1)
+# 💎 Golden Guard IoT ERP - Kurumsal Raspberry Pi Pico W Donanım Firmware (v2.2)
 # ==============================================================================
 # Özellikler:
 # 1. Çift Yönlü İletişim: ERP'ye Alarm & Heartbeat gönderir, ERP'den gelen IP isteklerini dinler.
@@ -8,8 +8,9 @@
 #    - GET  /api/status  -> JSON durum, Wi-Fi RSSI, uptime, pil/voltaj ve donanım sağlığı.
 #    - GET  /api/ping    -> Anlık yanıt ve gecikme testi (pong).
 #    - POST /api/trigger -> Web panelinden uzaktan alarm tetikleme testi.
-# 4. Donanım Buton Kesmesi: GP14 debounced fiziksel buton okuma.
-# 5. Akıllı Durum LED'i: Wi-Fi arama, normal kalp atışı, alarm flaşı ve arıza ikazı.
+# 4. HX711 Ağırlık Sensörü: Gerçek zamanlı gramaj okuma ve ERP'ye iletme.
+# 5. Donanım Buton Kesmesi: GP14 debounced fiziksel buton okuma.
+# 6. Akıllı Durum LED'i: Wi-Fi arama, normal kalp atışı, alarm flaşı ve arıza ikazı.
 # ==============================================================================
 
 import machine
@@ -18,8 +19,67 @@ import socket
 import json
 import config
 
-FIRMWARE_VERSION = "2.1.0-Enterprise"
+FIRMWARE_VERSION = "2.2.0-Enterprise"
 start_time = time.time()
+
+# --- HX711 Ağırlık Sensörü Sürücüsü ---
+class HX711:
+    def __init__(self, dout_pin, sck_pin):
+        self.PD_SCK = machine.Pin(sck_pin, machine.Pin.OUT)
+        self.DOUT = machine.Pin(dout_pin, machine.Pin.IN)
+        self.PD_SCK.value(0)
+        self.OFFSET = config.HX711_OFFSET
+        self.REFERENCE_UNIT = config.HX711_REFERENCE_UNIT
+        self.last_raw = 0
+
+    def _read_raw(self):
+        # HX711'den 24-bit ham değer oku
+        while self.DOUT.value() == 1:
+            time.sleep_us(1)
+        raw = 0
+        for _ in range(24):
+            self.PD_SCK.value(1)
+            time.sleep_us(1)
+            raw = (raw << 1) | self.DOUT.value()
+            self.PD_SCK.value(0)
+            time.sleep_us(1)
+        # 25. puls: A kanalı, kazanç 128
+        self.PD_SCK.value(1)
+        time.sleep_us(1)
+        self.PD_SCK.value(0)
+        time.sleep_us(1)
+        # İkili tamamlayıcı -> signed int
+        if raw & 0x800000:
+            raw -= 0x1000000
+        self.last_raw = raw
+        return raw
+
+    def read_grams(self, samples=5):
+        # Ortalama alarak gram cinsinden ağırlık döndür
+        total = 0
+        for _ in range(samples):
+            total += self._read_raw()
+            time.sleep_ms(10)
+        avg_raw = total // samples
+        grams = (avg_raw - self.OFFSET) / self.REFERENCE_UNIT
+        return round(max(0, grams), 2)
+
+    def tare(self, samples=10):
+        # Boş tabla ağırlığını sıfırla (dara al)
+        total = 0
+        for _ in range(samples):
+            total += self._read_raw()
+            time.sleep_ms(10)
+        self.OFFSET = total // samples
+        return self.OFFSET
+
+# HX711 başlat
+hx711 = None
+try:
+    hx711 = HX711(config.HX711_DT_PIN, config.HX711_SCK_PIN)
+    print(f"⚖️ HX711 başlatıldı: DT=GP{config.HX711_DT_PIN}, SCK=GP{config.HX711_SCK_PIN}")
+except Exception as e:
+    print(f"⚠️ HX711 başlatılamadı: {e}")
 
 # --- Donanım Tanımlamaları ---
 led = None
@@ -44,8 +104,18 @@ stats = {
     "last_latency_ms": 0,
     "last_alarm_time": "Yok",
     "device_ip": "0.0.0.0",
-    "wifi_rssi": -60
+    "wifi_rssi": -60,
+    "wifi_connection_attempts": 0,
+    "wifi_disconnects": 0,
+    "wifi_reconnects": 0,
+    "last_wifi_reset": 0
 }
+
+# WiFi yönetimi için global değişkenler
+wifi_backoff_base = 1  # Exponential backoff başlangıç (saniye)
+wifi_max_backoff = 60  # Maksimum backoff (saniye)
+wifi_healthy_threshold_rssi = -80  # dBm - bu değerden düşükse "sağlıksız"
+wlan = None  # WiFi arayüzü (global)
 
 def led_blink(times=1, on_ms=80, off_ms=80):
     if not led:
@@ -64,21 +134,27 @@ def get_uptime_str():
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 def connect_wifi():
-    """Wi-Fi Ağına Bağlanma"""
-    global stats
+    """Endüstriyel Wi-Fi Bağlantısı — Otomatik yeniden bağlanma, backoff, RSSI takibi"""
+    global stats, wifi_backoff_base, wlan
     try:
         import network
-        wlan = network.WLAN(network.STA_IF)
-        wlan.active(True)
+        if wlan is None:
+            wlan = network.WLAN(network.STA_IF)
+            wlan.active(True)
+        
+        stats["wifi_connection_attempts"] += 1
+        
         if not wlan.isconnected():
-            print(f"\n📡 Wi-Fi'a bağlanılıyor: {config.WIFI_SSID}...")
+            print(f"\n📡 Wi-Fi'a bağlanılıyor: {config.WIFI_SSID} (Deneme #{stats['wifi_connection_attempts']})...")
             wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
             
-            timeout = 15
-            while not wlan.isconnected() and timeout > 0:
+            # Exponential backoff ile bekle
+            timeout = min(15 + wifi_backoff_base, 30)
+            waited = 0
+            while not wlan.isconnected() and waited < timeout:
                 led_blink(1, 80, 80)
                 time.sleep(0.8)
-                timeout -= 1
+                waited += 0.8
                 print(".", end="")
             print("")
 
@@ -89,25 +165,46 @@ def connect_wifi():
                 stats["wifi_rssi"] = wlan.status('rssi')
             except Exception:
                 stats["wifi_rssi"] = -55
+            
+            # Başarılı bağlantı -> backoff sıfırla
+            wifi_backoff_base = 1
+            
+            # RSSI kalite raporu
+            rssi = stats["wifi_rssi"]
+            if rssi > -60:
+                quality = "⭐ Mükemmel"
+            elif rssi > -70:
+                quality = "✅ İyi"
+            elif rssi > -80:
+                quality = "⚠️ Orta (Zayıf sinyal)"
+            else:
+                quality = "🔴 Kritik (Sinyal çok zayıf!)"
 
             print("=" * 65)
             print("💎 GOLDEN GUARD IOT CİHAZI ÇEVRİMİÇİ!")
             print(f"📌 Firmware Sürümü : {FIRMWARE_VERSION}")
             print(f"📌 Cihaz IP Adresi : http://{stats['device_ip']}")
-            print(f"📌 Sinyal Gücü     : {stats['wifi_rssi']} dBm")
+            print(f"📌 Sinyal Gücü     : {rssi} dBm ({quality})")
             print(f"🎯 Hedef ERP       : http://{config.SERVER_HOST}:{config.SERVER_PORT}")
             print("=" * 65)
             led_blink(3, 150, 100)
+
+            # Wi-Fi bağlandıktan sonra ERP'ye kayıt ol
+            register_device()
+
             return True, wlan
         else:
-            print("❌ Wi-Fi bağlantısı kurulamadı! Lütfen config.py ayarlarını kontrol edin.")
-            return False, None
+            # Bağlantı başarısız -> exponential backoff
+            wifi_backoff_base = min(wifi_backoff_base * 2, wifi_max_backoff)
+            print(f"❌ Wi-Fi bağlantısı kurulamadı! {wifi_backoff_base}s sonra tekrar denenecek.")
+            return False, wlan
     except Exception as e:
         print(f"❌ Wi-Fi Hatası: {e}")
-        return False, None
+        wifi_backoff_base = min(wifi_backoff_base * 2, wifi_max_backoff)
+        return False, wlan
 
 def http_post_to_erp(path, json_data):
-    """ERP Sunucusuna HTTP POST İsteği Gönderir"""
+    """ERP Sunucusuna HTTP POST İsteği Gönderir (X-Device-Key ile güvenli)"""
     t_start = time.ticks_ms()
     s = socket.socket()
     s.settimeout(config.REQUEST_TIMEOUT_SEC)
@@ -116,11 +213,18 @@ def http_post_to_erp(path, json_data):
         s.connect(addr)
         
         body_bytes = json.dumps(json_data).encode("utf-8")
+        
+        # X-Device-Key ile güvenlik (SSL yerine)
+        device_key_header = ""
+        if config.DEVICE_KEY:
+            device_key_header = f"X-Device-Key: {config.DEVICE_KEY}\r\n"
+        
         headers = (
             f"POST {path} HTTP/1.1\r\n"
-            f"Host: {config.SERVER_HOST}:{config.SERVER_PORT}\r\n"
+            f"Host: {config.SERVER_HOST}\r\n"
             f"Content-Type: application/json\r\n"
             f"Content-Length: {len(body_bytes)}\r\n"
+            f"{device_key_header}"
             f"Connection: close\r\n\r\n"
         ).encode("utf-8")
         
@@ -139,6 +243,40 @@ def http_post_to_erp(path, json_data):
             pass
         latency = time.ticks_diff(time.ticks_ms(), t_start)
         return 0, latency, str(e)
+
+def register_device():
+    """Wi-Fi bağlandıktan sonra ERP'ye cihaz kaydı yapar"""
+    print("\n📋 ERP'ye cihaz kaydı yapılıyor...")
+    
+    # Önce 6 haneli kod ile kayıt dene
+    if config.PAIR_CODE and len(config.PAIR_CODE) == 6:
+        payload = {
+            "pair_code": config.PAIR_CODE,
+            "device_id": config.DEVICE_ID,
+            "ip_address": stats["device_ip"],
+            "firmware_version": FIRMWARE_VERSION,
+            "wifi_rssi": stats["wifi_rssi"]
+        }
+        status_code, latency, res = http_post_to_erp("/api/v1/devices/register-by-code", payload)
+        if 200 <= status_code < 300:
+            print(f"✅ ERP kodlu kayıt başarılı | HTTP {status_code} | {latency}ms")
+            return
+        else:
+            print(f"⚠️ Kodlu kayıt başarısız | HTTP {status_code} | {res}")
+    
+    # Kod yoksa eski yöntemle dene
+    payload = {
+        "device_id": config.DEVICE_ID,
+        "slot_number": config.SLOT_NUMBER,
+        "ip_address": stats["device_ip"],
+        "firmware_version": FIRMWARE_VERSION,
+        "wifi_rssi": stats["wifi_rssi"]
+    }
+    status_code, latency, res = http_post_to_erp("/api/v1/iot/register", payload)
+    if 200 <= status_code < 300:
+        print(f"✅ ERP kaydı başarılı | HTTP {status_code} | {latency}ms")
+    else:
+        print(f"⚠️ ERP kaydı başarısız | HTTP {status_code} | {res}")
 
 def send_alarm(trigger_source="Fiziksel Buton (GP14)"):
     """Acil Durum Alarmı Tetikler"""
@@ -172,12 +310,21 @@ def send_alarm(trigger_source="Fiziksel Buton (GP14)"):
     print("!" * 65 + "\n")
 
 def send_heartbeat():
-    """ERP'ye Canlılık (Heartbeat) Gönderir"""
+    """ERP'ye Canlılık (Heartbeat) ve Anlık Ağırlık Gönderir"""
     stats["total_heartbeats"] += 1
+    
+    # HX711'den gerçek ağırlık oku, yoksa varsayılan kullan
+    current_weight = 0.0
+    if hx711:
+        try:
+            current_weight = hx711.read_grams()
+        except Exception:
+            current_weight = 0.0
+    
     payload = {
         "device_id": config.DEVICE_ID,
         "slot_number": config.SLOT_NUMBER,
-        "weight_grams": 86.50
+        "weight_grams": current_weight
     }
     status_code, latency, res = http_post_to_erp("/api/v1/iot/telemetry", payload)
     stats["last_latency_ms"] = latency
@@ -189,7 +336,7 @@ def send_heartbeat():
         stats["successful_requests"] += 1
         stats["consecutive_failures"] = 0
         led_blink(1, 25, 10)
-        print(f"[{time_str}] [HEARTBEAT #{stats['total_heartbeats']:03d}] 🟢 Çevrimiçi | Ping: {latency}ms | Kod: {status_code}")
+        print(f"[{time_str}] [HEARTBEAT #{stats['total_heartbeats']:03d}] 🟢 Çevrimiçi | Ağırlık: {current_weight}g | Ping: {latency}ms | Kod: {status_code}")
     else:
         stats["failed_requests"] += 1
         stats["consecutive_failures"] += 1
@@ -200,7 +347,7 @@ def generate_web_portal_html():
     """Pico IP'sine Tarayıcıdan Girildiğinde Açılan Kurumsal Web Arayüzü"""
     uptime = get_uptime_str()
     rssi = stats["wifi_rssi"]
-    rssi_quality = "Mükemmel" if rssi > -60 else ("İyi" if rssi > -75 else "Zayıf")
+    rssi_quality = "⭐ Mükemmel" if rssi > -60 else ("✅ İyi" if rssi > -70 else ("⚠️ Orta" if rssi > -80 else "🔴 Kritik"))
     total_req = stats["successful_requests"] + stats["failed_requests"]
     success_pct = f"{(stats['successful_requests'] / total_req * 100):.1f}%" if total_req > 0 else "%100"
     
@@ -216,6 +363,7 @@ def generate_web_portal_html():
         .header {{ display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2d3748; padding-bottom: 16px; margin-bottom: 20px; }}
         .title {{ font-size: 18px; font-weight: bold; color: #f6ad55; letter-spacing: 0.5px; }}
         .badge {{ background: #22543d; color: #68d391; font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: bold; border: 1px solid #2f855a; }}
+        .badge-warn {{ background: #744210; color: #f6ad55; font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: bold; border: 1px solid #b7791f; }}
         .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }}
         .card {{ background: #0c0e14; border: 1px solid #242938; padding: 12px 14px; border-radius: 10px; }}
         .card-label {{ font-size: 11px; color: #a0aec0; text-transform: uppercase; margin-bottom: 4px; }}
@@ -245,8 +393,8 @@ def generate_web_portal_html():
                 <div class="card-val">{rssi} dBm ({rssi_quality})</div>
             </div>
             <div class="card">
-                <div class="card-label">Atanmış Yuva (Slot)</div>
-                <div class="card-val" style="color: #f6ad55;">Askı #{config.SLOT_NUMBER}</div>
+                <div class="card-label">Wi-Fi Bağlantı / Kopma</div>
+                <div class="card-val" style="color: #f6ad55;">{stats['wifi_reconnects']}/{stats['wifi_disconnects']}</div>
             </div>
             <div class="card">
                 <div class="card-label">Çalışma Süresi (Uptime)</div>
@@ -260,11 +408,15 @@ def generate_web_portal_html():
                 <div class="card-label">ERP Ping Gecikmesi</div>
                 <div class="card-val">{stats['last_latency_ms']} ms</div>
             </div>
+            <div class="card">
+                <div class="card-label">Anlık Ağırlık (HX711)</div>
+                <div class="card-val" style="color: #f6ad55;">{hx711.read_grams() if hx711 else 0.0} gr</div>
+            </div>
         </div>
 
         <div class="card" style="margin-bottom: 16px;">
             <div class="card-label">Hedef ERP Sunucu</div>
-            <div class="card-val" style="font-size: 13px;">http://{config.SERVER_HOST}:{config.SERVER_PORT}</div>
+            <div class="card-val" style="font-size: 13px;">http://{config.SERVER_HOST}:{config.SERVER_PORT} (X-Device-Key)</div>
         </div>
 
         <button class="btn" onclick="fetch('/api/trigger', {{method: 'POST'}}).then(() => alert('🚨 Acil durum alarm isteği ERP sunucusuna iletildi!'));">
@@ -306,6 +458,7 @@ def handle_http_request(client_socket):
                 "last_alarm_time": stats["last_alarm_time"],
                 "total_heartbeats": stats["total_heartbeats"],
                 "last_latency_ms": stats["last_latency_ms"],
+                "current_weight_grams": hx711.read_grams() if hx711 else 0.0,
                 "erp_server": f"http://{config.SERVER_HOST}:{config.SERVER_PORT}",
                 "firmware_version": FIRMWARE_VERSION
             }
@@ -379,6 +532,7 @@ def init_web_server(port=80):
         return None
 
 def main():
+    global wlan, wifi_backoff_base
     print("=" * 65)
     print("💎 Golden Guard - Raspberry Pi Pico Kurumsal IoT Firmware")
     print(f"📌 Buton Pini        : GP{config.BUTTON_PIN} (GND Tetikleme)")
@@ -404,6 +558,9 @@ def main():
     last_heartbeat_time = time.time()
     last_button_state = button.value()
     last_press_time = 0
+    last_wifi_health_check = time.time()
+    last_wifi_scan_time = 0
+    consecutive_http_failures = 0
     
     print("\n🟢 Donanım hazır! Kesintisiz liveness ve çift yönlü haberleşme devrede.\n")
     
@@ -418,18 +575,55 @@ def main():
         current_time_sec = time.time()
         current_time_ms = time.ticks_ms()
         
-        # --- 0) Wi-Fi Canlılık & Otomatik Yeniden Bağlanma ---
-        if wlan and not wlan.isconnected():
-            print("⚠️ [WIFI KOPTU] Bağlantı koptu! Hemen yeniden bağlanılıyor...")
-            led_blink(4, 50, 50)
-            wifi_ok, wlan = connect_wifi()
-            if wifi_ok:
+        # --- 0) ENDÜSTRİYEL Wi-Fi YÖNETİMİ ---
+        if wlan:
+            # 0a) Wi-Fi koptuysa hemen yeniden bağlan
+            if not wlan.isconnected():
+                stats["wifi_disconnects"] += 1
+                print(f"\n⚠️ [Wi-Fi KOPTU #{stats['wifi_disconnects']}] Sinyal kesildi! Yeniden bağlanılıyor...")
+                led_blink(4, 50, 50)
+                wifi_ok, wlan = connect_wifi()
+                if wifi_ok:
+                    stats["wifi_reconnects"] += 1
+                    print(f"✅ [Wi-Fi YENİDEN BAĞLANDI #{stats['wifi_reconnects']}]")
+                    try:
+                        if server_socket:
+                            server_socket.close()
+                    except Exception:
+                        pass
+                    server_socket = init_web_server(80)
+                continue  # Bir sonraki döngüde heartbeat gönder
+            
+            # 0b) Periyodik Wi-Fi sağlık kontrolü (her 30 saniyede bir RSSI ölç)
+            if current_time_sec - last_wifi_health_check >= 30:
+                last_wifi_health_check = current_time_sec
                 try:
-                    if server_socket:
-                        server_socket.close()
+                    rssi = wlan.status('rssi')
+                    stats["wifi_rssi"] = rssi
+                    
+                    # RSSI kritik seviyedeyse uyarı bas
+                    if rssi < wifi_healthy_threshold_rssi:
+                        print(f"⚠️ [Wi-Fi SAĞLIK] RSSI: {rssi} dBm — Sinyal çok zayıf! AP'ye yaklaşılması önerilir.")
+                    elif rssi < -70:
+                        print(f"📡 [Wi-Fi SAĞLIK] RSSI: {rssi} dBm — Sinyal orta seviyede.")
                 except Exception:
                     pass
-                server_socket = init_web_server(80)
+            
+            # 0c) RSSI çok düşükse ve uzun süredir bağlıysa, Wi-Fi adaptörünü sıfırla
+            # (Bazı AP'ler zamanla sinyal bozulması yaşar)
+            if (stats["wifi_rssi"] < wifi_healthy_threshold_rssi and 
+                current_time_sec - stats.get("last_wifi_reset", 0) > 300 and
+                stats["total_heartbeats"] > 10):
+                print("🔁 [Wi-Fi İYİLEŞTİRME] RSSI kritik, Wi-Fi adaptörü yeniden başlatılıyor...")
+                try:
+                    wlan.active(False)
+                    time.sleep_ms(1000)
+                    wlan.active(True)
+                    time.sleep_ms(500)
+                    wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+                    stats["last_wifi_reset"] = current_time_sec
+                except Exception as e:
+                    print(f"Wi-Fi reset hatası: {e}")
 
         # --- A) Gelen HTTP İsteklerini Dinle (Non-Blocking) ---
         if server_socket:
@@ -451,6 +645,7 @@ def main():
         if current_time_sec - last_heartbeat_time >= config.HEARTBEAT_INTERVAL_SEC:
             last_heartbeat_time = current_time_sec
             send_heartbeat()
+            
             # Wi-Fi sinyal gücünü güncelle
             if wlan and wlan.isconnected():
                 try:

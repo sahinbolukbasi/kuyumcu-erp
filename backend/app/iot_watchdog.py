@@ -44,7 +44,7 @@ async def check_iot_device_liveness():
                     f"🚨 [IOT BAĞLANTISI KOPTU] #{slot.slot_number} numaralı '{slot.label}' "
                     f"IoT cihazının sunucu ile iletişimi kesildi! (IP: {slot.ip_address})"
                 )
-                sys_log = models.SystemLog(
+                sys_log = models.SystemLog(tenant_id=slot.tenant_id,
                     level="CRITICAL",
                     module="IOT_SECURITY",
                     message=critical_msg,
@@ -64,7 +64,7 @@ async def check_iot_device_liveness():
                 # 2. Eğer yuvada tanımlı ürün varsa -> GÜVENLİK ALARMI OLUŞTUR (Sabotaj / Hırsızlık Şüphesi)
                 if has_products:
                     product_names = ", ".join([p.name for p in slot.products[:2]])
-                    sec_alert = models.SecurityAlert(
+                    sec_alert = models.SecurityAlert(tenant_id=slot.tenant_id,
                         slot_id=slot.id,
                         alert_type="DEVICE_DISCONNECTED",
                         message=(
@@ -80,7 +80,7 @@ async def check_iot_device_liveness():
                 db.refresh(slot)
 
                 # 3. Canlı WebSocket Yayını ile Tüm Ekranlara Bildir
-                await manager.broadcast({
+                await manager.broadcast({"tenant_id": slot.tenant_id,
                     "type": "DEVICE_OFFLINE",
                     "slot_number": slot.slot_number,
                     "slot_id": slot.id,

@@ -115,7 +115,7 @@ export default function MultiAlarmManager({
             {currentUser?.full_name || 'Yetkili Personel'}
           </div>
           <div className="text-[10px] text-indigo-400 font-mono">
-            {currentUser?.role === 'ADMIN' ? '👑 Sistem Yöneticisi' : currentUser?.role === 'MANAGER' ? '🏬 Mağaza Müdürü' : '👤 Satış Personeli'}
+            {currentUser?.role === 'ADMIN' ? '👑 Sistem Yöneticisi' : currentUser?.role === 'MANAGER' ? '🏬 Mağaza Müdürü' : currentUser?.role === 'ALARM_MANAGER' ? '🚨 Alarm Sorumlusu' : '👤 Satış Personeli'}
           </div>
         </div>
       </div>

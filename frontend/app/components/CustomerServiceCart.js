@@ -1,5 +1,7 @@
 'use client';
 
+import { apiFetch as fetch } from '../lib/api';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShoppingCart,

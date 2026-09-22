@@ -1,5 +1,4 @@
 'use client';
-
 import React, { useState, useEffect } from 'react';
 import SuperAdminMasterHQ from '../components/SuperAdminMasterHQ';
 import { ShieldCheck, Lock, Key, ArrowRight, AlertTriangle, LogOut, ExternalLink, Cpu } from 'lucide-react';
@@ -29,30 +28,30 @@ export default function MasterHQPage() {
     }
   }, []);
 
-  const handleMasterLogin = (e) => {
+  const handleMasterLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setLoading(true);
 
-    // Master Güvenlik Anahtarları
-    const validMasterKeys = [
-      'GG-MASTER-HQ-2026',
-      'GoldenGuardMaster2026!*',
-      'master2026',
-      'kuyumcu-hq-master'
-    ];
-
-    setTimeout(() => {
-      if (validMasterKeys.includes(masterKey.trim())) {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/master-auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: masterKey.trim(), otp: '' })
+      });
+      if (res.ok) {
         setIsAuthenticated(true);
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('gg_master_auth', 'true');
         }
       } else {
-        setErrorMsg('Yetkisiz Erişim Denemesi! Geçersiz Master Güvenlik Anahtarı.');
+        const err = await res.json();
+        setErrorMsg(err.detail || 'Yetkisiz Erişim Denemesi! Geçersiz Master Güvenlik Anahtarı.');
       }
-      setLoading(false);
-    }, 400);
+    } catch (err) {
+      setErrorMsg('Sunucuya bağlanılamadı. API adresini kontrol edin.');
+    }
+    setLoading(false);
   };
 
   const handleLogout = () => {

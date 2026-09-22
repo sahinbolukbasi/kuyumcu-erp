@@ -356,7 +356,7 @@ async def process_sale(
     db.refresh(sale)
 
     # WebSocket üzerinden anons et
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "PRODUCT_SOLD",
         "sale_id": sale.id,
         "invoice_no": invoice_no,

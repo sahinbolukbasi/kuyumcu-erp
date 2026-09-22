@@ -24,3 +24,16 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.tfplan
+
+# Docker
+data/
+uploads/
+
+# Logs
+*.log

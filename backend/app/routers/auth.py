@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas, auth
@@ -14,6 +14,7 @@ def serialize_user(user: models.User) -> schemas.UserOut:
         full_name=user.full_name,
         role=user.role,
         branch_id=user.branch_id,
+        tenant_id=user.tenant_id,
         branch_name=b_name,
         is_active=user.is_active,
         created_at=user.created_at
@@ -21,7 +22,8 @@ def serialize_user(user: models.User) -> schemas.UserOut:
 
 
 @router.post("/login", response_model=schemas.TokenOut)
-def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
+def login(login_data: schemas.UserLogin, request: Request, response: Response, db: Session = Depends(get_db)):
+    auth.enforce_login_limit(db, request, login_data.username)
     user = db.query(models.User).filter(models.User.username == login_data.username).first()
     if not user or not auth.verify_password(login_data.password, user.password_hash):
         raise HTTPException(
@@ -35,12 +37,33 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
             detail="Bu kullanıcı hesabı devre dışı bırakılmıştır."
         )
 
-    token = auth.create_access_token({"sub": str(user.id), "role": user.role, "branch_id": user.branch_id})
+    if auth.SECURE_COOKIES and len(login_data.password) < 12:
+        raise HTTPException(403, 'Üretim kullanımı için parolanız yönetici tarafından yenilenmelidir.')
+    auth.clear_login_failures(db, request, login_data.username)
+    auth.ensure_tenant_access(db, user)
+
+    if not user.password_hash.startswith('pbkdf2_sha256$'):
+        user.password_hash = auth.hash_password(login_data.password)
+    previous = auth.resolve_session(db, request.cookies.get('gg_session'))
+    if previous:
+        previous.revoked = True
+    auth.issue_session(db, response, user=user)
     return {
-        "access_token": token,
+        "access_token": "cookie-session",
         "token_type": "bearer",
         "user": serialize_user(user)
     }
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response, user=Depends(auth.require_current_user), db: Session = Depends(get_db)):
+    row = auth.resolve_session(db, request.cookies.get('gg_session'))
+    if row:
+        row.revoked = True
+        db.commit()
+    for name in ('gg_session', 'gg_csrf'):
+        response.delete_cookie(name, path='/', secure=auth.SECURE_COOKIES, samesite='strict')
+    return {'message': 'Oturum kapatıldı.'}
 
 
 @router.get("/me", response_model=schemas.UserOut)
@@ -82,6 +105,11 @@ def create_staff_user(
     if existing:
         raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten kullanılıyor.")
 
+    if len(user_in.password) < 12:
+        raise HTTPException(422, 'Şifre en az 12 karakter olmalıdır.')
+    if user_in.role not in {'ADMIN', 'MANAGER', 'STAFF', 'ALARM_MANAGER'}:
+        raise HTTPException(422, 'Geçersiz kullanıcı rolü.')
+
     # Mağaza Müdürü sadece kendi mağazasına STAFF açabilir
     target_branch_id = user_in.branch_id
     target_role = user_in.role
@@ -93,10 +121,10 @@ def create_staff_user(
     tenant_id = getattr(current_user, 'tenant_id', None) or 1
     license_obj = db.query(models.TenantLicense).filter(models.TenantLicense.tenant_id == tenant_id).first()
     if license_obj:
-        if target_role in ["ADMIN", "MANAGER"]:
+        if target_role in ["ADMIN", "MANAGER", "ALARM_MANAGER"]:
             current_admin_count = db.query(models.User).filter(
                 (models.User.tenant_id == tenant_id) & 
-                (models.User.role.in_(["ADMIN", "MANAGER"]))
+                (models.User.role.in_(["ADMIN", "MANAGER", "ALARM_MANAGER"]))
             ).count()
             if current_admin_count >= license_obj.max_admin_count:
                 raise HTTPException(
@@ -144,13 +172,16 @@ def update_user_details(
     if payload.full_name is not None:
         user.full_name = payload.full_name
     if payload.role is not None:
-        if payload.role in ["ADMIN", "MANAGER", "STAFF"]:
+        if payload.role in ["ADMIN", "MANAGER", "ALARM_MANAGER", "STAFF"]:
             user.role = payload.role
     if payload.branch_id is not None:
         user.branch_id = payload.branch_id if payload.branch_id > 0 else None
     if payload.is_active is not None:
         user.is_active = payload.is_active
     if payload.password:
+        if len(payload.password) < 12:
+            raise HTTPException(422, 'Şifre en az 12 karakter olmalıdır.')
+        db.query(models.AuthSession).filter(models.AuthSession.user_id == user.id).update({'revoked': True})
         user.password_hash = auth.hash_password(payload.password)
 
     db.commit()

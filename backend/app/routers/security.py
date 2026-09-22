@@ -1,7 +1,7 @@
 import datetime
 import json
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from ..database import get_db
@@ -83,7 +83,7 @@ async def toggle_night_mode(
     db.refresh(config)
 
     # WebSocket bildirim
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "NIGHT_MODE_UPDATED",
         "night_mode_active": config.night_mode_active,
         "message": f"Gece Güvenlik Modu: {state_str}"
@@ -95,23 +95,37 @@ async def toggle_night_mode(
 @router.post("/panic-button", response_model=schemas.SecurityEventLogOut)
 async def trigger_silent_panic_button(
     payload: schemas.PanicTriggerRequest,
-    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """Gizli / Ayak Altı Panik Butonu (Sessiz Alarm)"""
+    """Gizli / Ayak Altı Panik Butonu (Sessiz Alarm) - Auth gerektirmez (Pico donanım butonu)"""
     config = get_or_create_config(db)
     config.silent_panic_active = True
     config.last_panic_triggered_at = datetime.datetime.utcnow()
 
-    user_name = current_user.full_name if current_user else "Personel (Gizli Buton)"
+    # X-Device-Key ile gelen cihaz adını bul
+    device_key = request.headers.get('x-device-key', '')
+    device_name = "Personel (Gizli Buton)"
+    tenant_id = None
+    if device_key:
+        credential = db.query(models.DeviceCredential).filter(
+            models.DeviceCredential.id == auth.session_digest(device_key),
+            models.DeviceCredential.revoked == False
+        ).first()
+        if credential:
+            device = db.get(models.IoTDevice, credential.device_id)
+            if device:
+                device_name = f"IoT:{device.device_id} ({device.label})"
+                tenant_id = device.tenant_id
 
     event = models.SecurityEventLog(
         event_type="PANIC_ALARM",
         severity="CRITICAL",
         title="🚨 SESSİZ PANİK ALARMI TETİKLENDİ!",
         details=f"{payload.trigger_source}: {payload.details} - Bildirim güvenlik merkezine iletildi.",
-        user_name=user_name,
+        user_name=device_name,
         is_resolved=False,
+        tenant_id=tenant_id or 1,
         created_at=datetime.datetime.utcnow()
     )
     db.add(event)
@@ -121,7 +135,8 @@ async def trigger_silent_panic_button(
         level="SECURITY",
         module="SECURITY",
         message="SESSİZ PANİK BUTONU TETİKLENDİ - ACİL MÜDAHALE ÇAĞRISI",
-        user_name=user_name
+        user_name=device_name,
+        tenant_id=tenant_id or 1
     )
     db.add(sys_log)
 
@@ -129,7 +144,7 @@ async def trigger_silent_panic_button(
     db.refresh(event)
 
     # WebSocket ile anons et
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": tenant_id or 1,
         "type": "PANIC_ALARM",
         "event_id": event.id,
         "severity": "CRITICAL",
@@ -174,7 +189,7 @@ async def verify_weight_anomaly(
         db.add(event)
         db.commit()
 
-        await iot_service.manager.broadcast({
+        await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
             "type": "WEIGHT_ANOMALY",
             "product_id": product.id,
             "product_name": product.name,

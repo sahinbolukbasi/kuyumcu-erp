@@ -152,17 +152,23 @@ async def upload_image(
     file: UploadFile = File(...),
     admin: models.User = Depends(auth.require_admin)
 ):
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".avif"]:
-        raise HTTPException(status_code=400, detail="Sadece resim dosyaları desteklenir (.jpg, .png, .webp)")
-
-    filename = f"prod_{uuid.uuid4().hex[:10]}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    return {"image_url": f"/uploads/{filename}"}
+    from io import BytesIO
+    from PIL import Image, UnidentifiedImageError
+    content = await file.read(2 * 1024 * 1024 + 1)
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(413, 'Resim en fazla 2 MB olabilir.')
+    try:
+        image = Image.open(BytesIO(content))
+        if image.format not in {'PNG','JPEG','WEBP'} or image.width * image.height > 4_000_000:
+            raise ValueError()
+        image.load()
+        filename = f'prod_{uuid.uuid4().hex}.png'
+        folder = os.path.join(UPLOAD_DIR, str(admin.tenant_id))
+        os.makedirs(folder, mode=0o700, exist_ok=True)
+        image.convert('RGB').save(os.path.join(folder, filename), format='PNG')
+    except (UnidentifiedImageError, ValueError, OSError, Image.DecompressionBombError):
+        raise HTTPException(422, 'Geçerli ve en fazla 4 megapiksel bir resim yükleyiniz.')
+    return {'image_url': f'/uploads/{admin.tenant_id}/{filename}'}
 
 
 @router.get("/{product_id}/presentation", response_model=schemas.ProductDetailPresentationOut)

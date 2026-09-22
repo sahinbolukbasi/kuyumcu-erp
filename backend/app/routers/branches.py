@@ -40,7 +40,13 @@ def create_branch(
     db: Session = Depends(get_db)
 ):
     """Yeni mağaza / şube ekleme (Sadece Admin - PRD Modül 1)"""
+    tenant_id = admin.tenant_id or 1
+    license_obj = db.query(models.TenantLicense).filter(models.TenantLicense.tenant_id == tenant_id).first()
+    branch_count = db.query(models.Branch).filter(models.Branch.tenant_id == tenant_id, models.Branch.is_active == True).count()
+    if license_obj and branch_count >= license_obj.max_branches_count:
+        raise HTTPException(status_code=403, detail="Firma şube kotası dolmuştur.")
     b = models.Branch(
+        tenant_id=tenant_id,
         name=branch_in.name,
         branch_code=branch_in.branch_code or f"BR-{db.query(models.Branch).count() + 1:02d}",
         region=branch_in.region or "Marmara",
@@ -71,6 +77,9 @@ def add_branch_location(
     if not branch:
         raise HTTPException(status_code=404, detail="Mağaza bulunamadı")
 
+    if branch.tenant_id != (admin.tenant_id or 1):
+        raise HTTPException(status_code=403, detail="Bu mağazaya erişim yetkiniz yok.")
+    auth.ensure_slot_quota(db, admin.tenant_id or 1)
     max_slot = db.query(models.RackSlot).order_by(models.RackSlot.slot_number.desc()).first()
     next_num = (max_slot.slot_number + 1) if max_slot else 1
 

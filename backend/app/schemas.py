@@ -1,11 +1,12 @@
 import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
+from decimal import Decimal
 from pydantic import BaseModel, Field
 
 # --- User & Auth Schemas ---
 class UserLogin(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1, max_length=256)
 
 class UserCreate(BaseModel):
     username: str
@@ -27,12 +28,26 @@ class UserOut(BaseModel):
     full_name: str
     role: str
     branch_id: Optional[int] = None
+    tenant_id: Optional[int] = None
     branch_name: Optional[str] = None
     is_active: bool
     created_at: datetime.datetime
 
     class Config:
         from_attributes = True
+
+
+class TenantModuleSettingsOut(BaseModel):
+    tenant_id: int
+    modules: Dict[str, bool]
+    updated_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TenantModuleSettingsUpdate(BaseModel):
+    modules: Dict[str, bool]
 
 class TokenOut(BaseModel):
     access_token: str
@@ -257,7 +272,7 @@ class RackSlotOut(RackSlotBase):
 class SlotAssignRequest(BaseModel):
     product_id: int
     action: str = "ADD" # ADD veya REMOVE
-    quantity: Optional[int] = None # Kaç adet atanacak veya çıkarılacak
+    quantity: Optional[int] = Field(default=None, ge=1, le=100000) # Kaç adet atanacak veya çıkarılacak
 
 class SlotCreateRequest(BaseModel):
     slot_number: int
@@ -382,7 +397,7 @@ class SaleCreate(BaseModel):
     customer_phone: Optional[str] = None
     customer_email: Optional[str] = None
     payment_method: Optional[str] = "Kredi Kartı"
-    discount_amount: Optional[float] = 0.0
+    discount_amount: Optional[float] = Field(default=0, ge=0, allow_inf_nan=False)
     gold_rate_at_sale: Optional[float] = 3045.0
     user_id: Optional[int] = None
     sold_by_name: Optional[str] = None
@@ -978,7 +993,7 @@ class TenantCompanyCreate(BaseModel):
     
     # İlk Müşteri Admin Hesabı (Sistemi Kullanacak İlk Yönetici)
     admin_username: str
-    admin_password: str
+    admin_password: str = Field(min_length=12, max_length=256)
     admin_full_name: str
 
 
@@ -1036,16 +1051,25 @@ class TenantCompanyOut(BaseModel):
         from_attributes = True
 
 
+class TenantCompanyUpdate(BaseModel):
+    company_name: str = Field(min_length=1, max_length=150)
+    owner_name: str = Field(min_length=1, max_length=100)
+    contact_phone: str = Field(min_length=1, max_length=30)
+    contact_email: str = Field(min_length=1, max_length=100)
+    city: str = Field(min_length=1, max_length=50)
+    tax_id: Optional[str] = Field(default=None, max_length=50)
+
+
 class TenantLicenseUpdate(BaseModel):
     plan_type: Optional[str] = None
     billing_cycle: Optional[str] = None
-    subscription_fee: Optional[float] = None
+    subscription_fee: Optional[float] = Field(default=None, ge=0)
     status: Optional[str] = None # ACTIVE, EXPIRED, SUSPENDED
-    extend_months: Optional[int] = None
-    max_admin_count: Optional[int] = None
-    max_staff_count: Optional[int] = None
-    max_branches_count: Optional[int] = None
-    max_showcase_slots: Optional[int] = None
+    extend_months: Optional[int] = Field(default=None, ge=0)
+    max_admin_count: Optional[int] = Field(default=None, ge=0)
+    max_staff_count: Optional[int] = Field(default=None, ge=0)
+    max_branches_count: Optional[int] = Field(default=None, ge=0)
+    max_showcase_slots: Optional[int] = Field(default=None, ge=0)
 
 
 class TenantBackupOut(BaseModel):
@@ -1077,3 +1101,505 @@ class SystemCostAnalyticsOut(BaseModel):
     per_user_cloud_cost_try: float
     last_nightly_backup_status: str
     last_nightly_backup_time: Optional[str] = None
+
+
+# =========================================================================
+# e-FATURA & e-ARŞİV ENTEGRASYON ŞEMALARI
+# =========================================================================
+
+class CompanyProfileOut(BaseModel):
+    id: int
+    tenant_id: Optional[int] = 1
+    company_title: str
+    tax_office: str
+    tax_number: str
+    mersis_no: Optional[str] = ""
+    central_registration_no: Optional[str] = ""
+    trade_registry_no: Optional[str] = ""
+    address: str
+    phone: str
+    email: str
+    website: Optional[str] = ""
+    logo_base64: Optional[str] = None
+    logo_mime_type: Optional[str] = "image/png"
+    integrator_type: str
+    integrator_api_url: Optional[str] = None
+    e_invoice_active: bool
+    e_archive_active: bool
+    sandbox_mode: bool
+    default_payment_term_days: int
+    default_currency: str
+    default_language: str
+    invoice_footer_note: Optional[str] = None
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CompanyProfileUpdate(BaseModel):
+    company_title: Optional[str] = None
+    tax_office: Optional[str] = None
+    tax_number: Optional[str] = None
+    mersis_no: Optional[str] = None
+    central_registration_no: Optional[str] = None
+    trade_registry_no: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    integrator_type: Optional[str] = None
+    integrator_api_url: Optional[str] = None
+    integrator_api_key: Optional[str] = None
+    integrator_api_secret: Optional[str] = None
+    integrator_username: Optional[str] = None
+    integrator_password: Optional[str] = None
+    e_invoice_active: Optional[bool] = None
+    e_archive_active: Optional[bool] = None
+    sandbox_mode: Optional[bool] = None
+    default_payment_term_days: Optional[int] = None
+    default_currency: Optional[str] = None
+    default_language: Optional[str] = None
+    invoice_footer_note: Optional[str] = None
+
+
+class LogoUploadResponse(BaseModel):
+    success: bool
+    message: str
+    logo_base64: Optional[str] = None
+    logo_mime_type: Optional[str] = None
+
+
+class InvoiceDraftInput(BaseModel):
+    sale_id: int = Field(gt=0)
+    customer_title: Optional[str] = Field(default=None, max_length=200)
+    customer_name: Optional[str] = Field(default=None, max_length=200)
+    customer_tax_office: Optional[str] = Field(default=None, max_length=100)
+    customer_tax_number: Optional[str] = Field(default=None, pattern=r"^([0-9]{10}|[0-9]{11})?$")
+    customer_id_number: Optional[str] = Field(default=None, pattern=r"^([0-9]{10}|[0-9]{11})?$")
+    customer_address: str = Field(min_length=5, max_length=1500)
+    customer_email: Optional[str] = Field(default=None, max_length=100)
+    customer_phone: Optional[str] = Field(default=None, max_length=30)
+    recipient_registry: Literal['REGISTERED', 'NOT_REGISTERED', 'UNKNOWN'] = 'UNKNOWN'
+    tax_treatment: Literal['STANDARD', 'GOLD_SPECIAL', 'BULLION_EXEMPT']
+    metal_base: Optional[Decimal] = Field(default=None, ge=0, max_digits=16, decimal_places=2)
+    tax_basis_note: str = Field(min_length=5, max_length=1500)
+    notes: Optional[str] = Field(default=None, max_length=2000)
+    payment_term_days: Optional[int] = Field(default=None, ge=0, le=365)
+    delivery_type: Literal['EMAIL', 'PRINT', 'KEP'] = 'PRINT'
+
+
+class EInvoiceCreate(InvoiceDraftInput):
+    pass
+
+
+class EArchiveInvoiceCreate(InvoiceDraftInput):
+    pass
+
+
+class InvoiceFromSale(InvoiceDraftInput):
+    sale_id: int = 1  # URL is authoritative.
+    invoice_type: Literal['einvoice', 'earchive']
+
+
+class InvoiceItemOut(BaseModel):
+    id: int
+    line_number: int
+    item_name: str
+    item_code: Optional[str] = None
+    unit_type: str
+    quantity: float
+    unit_price: float
+    vat_rate: float
+    vat_amount: float
+    is_vat_exempt: bool
+    gold_purity: Optional[str] = None
+    gold_weight_grams: Optional[float] = None
+    gold_labor_cost: float
+    line_total: float
+
+    class Config:
+        from_attributes = True
+
+
+class EInvoiceOut(BaseModel):
+    snapshot_json: Optional[str] = None
+    id: int
+    invoice_uuid: str
+    invoice_number: str
+    profile_id: str
+    sale_id: Optional[int] = None
+    sale_invoice_no: Optional[str] = None
+    supplier_title: str
+    supplier_tax_office: str
+    supplier_tax_number: str
+    customer_title: str
+    customer_tax_office: Optional[str] = None
+    customer_tax_number: Optional[str] = None
+    customer_id_number: Optional[str] = None
+    customer_email: Optional[str] = None
+    invoice_date: datetime.datetime
+    currency: str
+    total_gross_amount: float
+    total_vat_amount: float
+    total_vat_exempt_amount: float
+    total_payable_amount: float
+    status: str
+    integrator_status: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EArchiveInvoiceOut(BaseModel):
+    snapshot_json: Optional[str] = None
+    id: int
+    invoice_number: str
+    invoice_uuid: str
+    sale_id: Optional[int] = None
+    sale_invoice_no: Optional[str] = None
+    customer_name: str
+    customer_id_number: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    invoice_date: datetime.datetime
+    currency: str
+    delivery_type: str
+    total_gross_amount: float
+    total_vat_amount: float
+    total_vat_exempt_amount: float
+    total_payable_amount: float
+    status: str
+    integrator_status: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InvoiceListOut(BaseModel):
+    e_invoices: List[EInvoiceOut] = []
+    e_archive_invoices: List[EArchiveInvoiceOut] = []
+
+
+class InvoiceSendEmailRequest(BaseModel):
+    recipient_email: str
+    message: Optional[str] = None
+
+
+# =========================================================================
+# MÜŞTERİ SEPETİ & HİZMET SİSTEMİ ŞEMALARI
+# =========================================================================
+
+class CartItemCreate(BaseModel):
+    product_id: int
+    variant_id: Optional[int] = None
+    quantity: int = Field(default=1, ge=1, le=100000)
+    discount_amount: float = Field(default=0, ge=0, allow_inf_nan=False)
+    customer_reaction: Optional[str] = None  # BEGENDI, KARARSIZ, BEGENMEDI, FIYAT_YUKSEK
+    inspection_seconds: Optional[int] = 0
+
+
+class CartItemUpdate(BaseModel):
+    quantity: Optional[int] = Field(default=None, ge=1, le=100000)
+    discount_amount: Optional[float] = None
+    customer_reaction: Optional[str] = None
+    inspection_seconds: Optional[int] = None
+
+
+class CartItemOut(BaseModel):
+    id: int
+    cart_id: int
+    product_id: Optional[int] = None
+    variant_id: Optional[int] = None
+    product_name: str
+    barcode: Optional[str] = None
+    category: Optional[str] = None
+    purity: Optional[str] = None
+    weight_grams: float
+    quantity: int
+    unit_price: float
+    labor_cost: float
+    vat_rate: float
+    vat_amount: float
+    is_vat_exempt: bool
+    discount_amount: float
+    line_total: float
+    was_shown_to_customer: bool
+    customer_reaction: Optional[str] = None
+    inspection_seconds: int
+    is_sold: bool
+    sale_id: Optional[int] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CartCreate(BaseModel):
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_email: Optional[str] = None
+    service_type: str = "SHOWROOM"
+    notes: Optional[str] = None
+    customer_wish: Optional[str] = None
+
+
+class CartUpdate(BaseModel):
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_email: Optional[str] = None
+    notes: Optional[str] = None
+    customer_wish: Optional[str] = None
+    service_type: Optional[str] = None
+
+
+class CartOut(BaseModel):
+    id: int
+    cart_code: str
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_email: Optional[str] = None
+    user_id: int
+    user_name: Optional[str] = None
+    branch_id: int
+    session_id: Optional[int] = None
+    status: str
+    service_type: str
+    total_gross_amount: float
+    total_vat_amount: float
+    total_vat_exempt_amount: float
+    total_labor_cost: float
+    total_payable_amount: float
+    gold_rate_at_cart: float
+    notes: Optional[str] = None
+    customer_wish: Optional[str] = None
+    started_at: datetime.datetime
+    closed_at: Optional[datetime.datetime] = None
+    duration_minutes: float
+    items: List[CartItemOut] = []
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CartConvertToSale(BaseModel):
+    """Sepeti satışa dönüştürme"""
+    payment_method: str = "Kredi Kartı"
+    item_ids: Optional[List[int]] = None  # Boşsa tümü satılsın
+
+
+class CartConvertToInvoice(BaseModel):
+    """Sepetten fatura kesme"""
+    invoice_type: str = "auto"  # auto, einvoice, earchive
+    customer_tax_number: Optional[str] = None
+    customer_email: Optional[str] = None
+
+
+# --- Hatırlatıcı Şemaları ---
+class ReminderCreate(BaseModel):
+    cart_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    reminder_type: str = "FOLLOW_UP"
+    title: str
+    note: Optional[str] = None
+    reminder_date: datetime.datetime
+    product_id: Optional[int] = None
+    product_name: Optional[str] = None
+
+
+class ReminderUpdate(BaseModel):
+    title: Optional[str] = None
+    note: Optional[str] = None
+    reminder_date: Optional[datetime.datetime] = None
+    is_completed: Optional[bool] = None
+
+
+class ReminderOut(BaseModel):
+    id: int
+    cart_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    user_id: int
+    user_name: Optional[str] = None
+    reminder_type: str
+    title: str
+    note: Optional[str] = None
+    reminder_date: datetime.datetime
+    is_completed: bool
+    completed_at: Optional[datetime.datetime] = None
+    notified: bool
+    product_id: Optional[int] = None
+    product_name: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Talep Şemaları ---
+class DemandCreate(BaseModel):
+    cart_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    requested_model: str
+    category: str = "Bilezik"
+    purity: str = "22K"
+    weight_grams: Optional[float] = None
+    approx_budget: Optional[float] = None
+    is_urgent: bool = False
+    notes: Optional[str] = None
+
+
+class DemandOut(BaseModel):
+    id: int
+    cart_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    branch_id: int
+    requested_model: str
+    category: str
+    purity: str
+    weight_grams: Optional[float] = None
+    approx_budget: Optional[float] = None
+    is_urgent: bool
+    status: str
+    notes: Optional[str] = None
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Sepet Analitik Şemaları ---
+class CartMetricsOut(BaseModel):
+    total_active_carts: int
+    total_carts_today: int
+    total_carts_this_week: int
+    total_carts_this_month: int
+    conversion_rate: float  # Sepetten satışa dönüşüm %
+    average_cart_value: float  # Ortalama sepet tutarı
+    average_service_minutes: float  # Ortalama servis süresi
+    total_abandoned_carts: int  # Sepet terk
+    total_revenue_from_carts: float  # Sepetten gelen ciro
+    most_added_products: List[dict] = []  # En çok sepete eklenen ürünler
+    staff_cart_performance: List[dict] = []  # Personel bazlı sepet performansı
+    top_demanded_models: List[dict] = []  # En çok talep edilen modeller
+    active_reminders_today: int  # Bugün yapılacak hatırlatmalar
+    missed_opportunities: List[dict] = []  # Sepete eklendi ama satılmadı
+
+
+class CustomerInterestReport(BaseModel):
+    """Müşteri ilgi haritası - Admin Dashboard için"""
+    total_customers_served: int
+    total_products_shown: int
+    total_inspection_minutes: float
+    liked_products: List[dict] = []  # Beğenilen ürünler
+    price_sensitive_products: List[dict] = []  # Fiyattan çekinilen
+    undecided_products: List[dict] = []  # Kararsız kalınan
+    top_categories_by_interest: List[dict] = []  # Kategori bazlı ilgi
+
+
+# =========================================================================
+# IoT CİHAZ YÖNETİMİ & ÜRÜN ATAMA ŞEMALARI
+# =========================================================================
+
+class IoTDeviceCreate(BaseModel):
+    device_id: str
+    device_type: str = "PICO_W"
+    mac_address: Optional[str] = None
+    firmware_version: Optional[str] = "2.1.0-Enterprise"
+    label: str
+    branch_id: int = 1
+    location_desc: Optional[str] = None
+    ip_address: Optional[str] = "192.168.1.100"
+    port: int = 80
+    wifi_ssid: Optional[str] = None
+
+
+class IoTDeviceUpdate(BaseModel):
+    label: Optional[str] = None
+    branch_id: Optional[int] = None
+    location_desc: Optional[str] = None
+    ip_address: Optional[str] = None
+    port: Optional[int] = None
+    is_active: Optional[bool] = None
+    status: Optional[str] = None  # ACTIVE, INACTIVE, MAINTENANCE
+
+
+class IoTDeviceOut(BaseModel):
+    id: int
+    device_id: str
+    device_type: str
+    mac_address: Optional[str] = None
+    firmware_version: Optional[str] = None
+    label: str
+    branch_id: int
+    branch_name: Optional[str] = None
+    location_desc: Optional[str] = None
+    ip_address: str
+    port: int
+    wifi_ssid: Optional[str] = None
+    wifi_rssi: int
+    is_online: bool
+    is_active: bool
+    status: str
+    last_ping: Optional[datetime.datetime] = None
+    battery_level: Optional[int] = None
+    paired_at: Optional[datetime.datetime] = None
+    paired_by: Optional[str] = None
+    total_heartbeats: int
+    total_alarms: int
+    last_alarm_at: Optional[datetime.datetime] = None
+    slot_count: int = 0  # Bağlı slot/askı sayısı
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class IoTDevicePairResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str
+    auth_token: str
+    paired_at: str
+
+
+class IoTDeviceAssignProduct(BaseModel):
+    product_id: int
+    slot_id: int  # Hangi slota atanacak
+    quantity: int = Field(default=1, ge=1, le=100000)
+
+
+class IoTDeviceTelemetry(BaseModel):
+    device_id: str
+    slot_number: int
+    weight_grams: float
+    battery_level: Optional[int] = None
+    wifi_rssi: Optional[int] = None
+
+
+class IoTDeviceStatsOut(BaseModel):
+    total_devices: int
+    online_devices: int
+    offline_devices: int
+    active_alerts: int
+    total_products_assigned: int
+    devices_by_type: List[dict] = []
+    devices_by_branch: List[dict] = []
+    recent_telemetry: List[dict] = []

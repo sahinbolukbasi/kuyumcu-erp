@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -12,7 +12,7 @@ class User(Base):
     full_name = Column(String(100), nullable=False)
     role = Column(String(20), default="STAFF") # ADMIN, MANAGER, STAFF
     branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True) # Atandığı Mağaza/Şube
-    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True, default=1) # Ait olduğu Firma (Tenant)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True) # Ait olduğu Firma (Tenant)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -24,6 +24,7 @@ class User(Base):
 
 class Customer(Base):
     __tablename__ = "customers"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String(120), nullable=False, index=True)
@@ -56,7 +57,7 @@ class Branch(Base):
     phone = Column(String(30), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"))
     users = relationship("User", back_populates="branch", foreign_keys="User.branch_id")
     products = relationship("Product", back_populates="branch")
     sales = relationship("Sale", back_populates="branch")
@@ -109,8 +110,8 @@ class Product(Base):
     care_instructions = Column(Text, default="Parfüm ve kimyasallardan uzak tutunuz. Ilık sabunlu su ve yumuşak mikrofiber bezle temizleyiniz. Her yıl mağazamızda ücretsiz cila ve taş tırnak kontrolü yaptırabilirsiniz.")
     
     # Şube & Firma İzolasyonu (Tenant)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
-    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"))
 
     # Hangi askıda/tablada asılı? (Bir askıda birden fazla ürün olabilir)
     slot_id = Column(Integer, ForeignKey("rack_slots.id"), nullable=True)
@@ -134,6 +135,7 @@ class Product(Base):
 
 class ProductVariant(Base):
     __tablename__ = "product_variants"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
@@ -152,13 +154,14 @@ class ProductVariant(Base):
 
 class CustomerReservation(Base):
     __tablename__ = "customer_reservations"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     reservation_code = Column(String(50), unique=True, index=True, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     variant_id = Column(Integer, ForeignKey("product_variants.id"), nullable=True)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     deposit_amount = Column(Float, default=0.0)
     total_agreed_price = Column(Float, default=0.0)
@@ -178,6 +181,7 @@ class CustomerReservation(Base):
 class IoTDevice(Base):
     """IoT Fiziksel Cihaz - Pico W / ESP32 / ESP8266 vitrin sensör cihazı"""
     __tablename__ = "iot_devices"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String(50), unique=True, index=True, nullable=False)  # PICO_VITRIN_01
@@ -187,7 +191,7 @@ class IoTDevice(Base):
 
     # Kimlik Bilgileri
     label = Column(String(100), nullable=False, default="Vitrin Cihazı")
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
     location_desc = Column(String(200), nullable=True)  # Fiziksel konum
 
     # Bağlantı
@@ -205,6 +209,7 @@ class IoTDevice(Base):
 
     # Güvenlik
     auth_token = Column(String(128), nullable=True)  # Cihaz eşleştirme token'ı
+    pair_code = Column(String(6), nullable=True, index=True)  # 6 haneli eşleştirme kodu
     paired_at = Column(DateTime, nullable=True)  # Eşleştirme tarihi
     paired_by = Column(String(100), nullable=True)  # Kim eşleştirdi
 
@@ -222,6 +227,7 @@ class IoTDevice(Base):
 
 class RackSlot(Base):
     __tablename__ = "rack_slots"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     slot_number = Column(Integer, unique=True, index=True, nullable=False)
@@ -241,7 +247,7 @@ class RackSlot(Base):
     tolerance_grams = Column(Float, default=0.20)
     status = Column(String(30), default="EMPTY") # EMPTY, NORMAL, INSPECTION, ALERT
     is_inspection_authorized = Column(Boolean, default=False)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
     last_lifted_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -254,6 +260,7 @@ class RackSlot(Base):
 
 class SecurityAlert(Base):
     __tablename__ = "security_alerts"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     slot_id = Column(Integer, ForeignKey("rack_slots.id"), nullable=False)
@@ -297,8 +304,8 @@ class Sale(Base):
     profit_margin_percent = Column(Float, default=0.0)
 
     # Şube & Firma İzolasyonu (Tenant)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
-    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"))
 
     # İki Kişi Kuralı (Yüksek Tutar Çoklu Doğrulama)
     is_two_man_approved = Column(Boolean, default=False)
@@ -324,6 +331,7 @@ class Sale(Base):
 
 class GoldPurchase(Base):
     __tablename__ = "gold_purchases"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     receipt_no = Column(String(50), unique=True, index=True, nullable=True) # Fiş / Gider Pusula No
@@ -348,7 +356,7 @@ class GoldPurchase(Base):
     buyer_name = Column(String(100), default="Yetkili Personel")
     
     # Şube ve Depo
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
     storage_location = Column(String(100), default="Hurda / Çıkma Kasası")
     notes = Column(Text, nullable=True)
     
@@ -361,6 +369,7 @@ class GoldPurchase(Base):
 
 class InspectionLog(Base):
     __tablename__ = "inspection_logs"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
@@ -375,6 +384,7 @@ class InspectionLog(Base):
 
 class SystemLog(Base):
     __tablename__ = "system_logs"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     level = Column(String(20), default="INFO")
@@ -394,6 +404,7 @@ class SystemLog(Base):
 class ServiceSession(Base):
     """Personelin bir müşteriyle ilgilendiği hizmet seansı ve süre takibi"""
     __tablename__ = "service_sessions"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -412,6 +423,7 @@ class ServiceSession(Base):
 class LostDemandNote(Base):
     """Müşterinin sorup mağazada bulunamayan altın modelleri (Karar Destek)"""
     __tablename__ = "lost_demand_notes"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -427,10 +439,11 @@ class LostDemandNote(Base):
 class StockCountAudit(Base):
     """Barkod / RFID ile Hızlı Sayım ve Sistem Mutabakatı"""
     __tablename__ = "stock_count_audits"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(150), default="Aylık Vitrin & Kasa Sayımı")
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
     conducted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     conducted_by_name = Column(String(100), default="Yetkili Personel")
     status = Column(String(30), default="IN_PROGRESS") # IN_PROGRESS, COMPLETED
@@ -447,6 +460,7 @@ class StockCountAudit(Base):
 class StockCountItem(Base):
     """Sayım sırasında okutulan tekil ürün kaydı"""
     __tablename__ = "stock_count_items"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     audit_id = Column(Integer, ForeignKey("stock_count_audits.id"), nullable=False)
@@ -465,6 +479,7 @@ class StockCountItem(Base):
 class MasakRecord(Base):
     """Türkiye MASAK Mevzuatı: 85.000 TL Üzeri Altın Alım-Satım Kimlik Kaydı"""
     __tablename__ = "masak_records"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False, unique=True)
@@ -488,6 +503,7 @@ class MasakRecord(Base):
 class SecuritySystemConfig(Base):
     """İleri Güvenlik Ayarları (Gece Modu, İki Kişi Eşiği, Sahte Altın Toleransı)"""
     __tablename__ = "security_system_config"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     night_mode_active = Column(Boolean, default=False) # Gece/Mağaza Kapalı Modu
@@ -503,6 +519,7 @@ class SecuritySystemConfig(Base):
 class SecurityEventLog(Base):
     """Güvenlik Olayları, Biyometrik Kilit & Panik Günlüğü"""
     __tablename__ = "security_event_logs"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     event_type = Column(String(50), nullable=False) # NIGHT_BURGLARY, PANIC_ALARM, WEIGHT_ANOMALY, BIOMETRIC_ACCESS, PIR_MOTION
@@ -520,12 +537,13 @@ class SecurityEventLog(Base):
 class CustomerInterest(Base):
     """PRD Modül 7: Müşteri Ürün İlgi, Deneme ve Beğeni Takibi"""
     __tablename__ = "customer_interests"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
     action_type = Column(String(30), default="SHOWN")  # SHOWN, LIKED, FAVORITE
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -538,6 +556,7 @@ class CustomerInterest(Base):
 
 class DailyReport(Base):
     __tablename__ = "daily_reports"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     report_date = Column(String(20), index=True) # YYYY-MM-DD
@@ -577,6 +596,18 @@ class TenantCompany(Base):
     license = relationship("TenantLicense", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
     backups = relationship("TenantBackupLog", back_populates="tenant", cascade="all, delete-orphan")
     usage_metrics = relationship("TenantUsageMetric", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
+
+
+class TenantModuleSetting(Base):
+    """Firma bazında açılıp kapatılabilen ERP modülleri."""
+    __tablename__ = "tenant_module_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), unique=True, nullable=False, index=True)
+    modules_json = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    tenant = relationship("TenantCompany")
 
 
 class TenantLicense(Base):
@@ -662,20 +693,20 @@ class CompanyProfile(Base):
     __tablename__ = "company_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True, default=1)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True)
 
     # Firma Bilgileri
-    company_title = Column(String(200), nullable=False, default="Golden Guard Sarrafiye & Mücevherat A.Ş.")
-    tax_office = Column(String(100), nullable=False, default="İstanbul Vergi Dairesi")
-    tax_number = Column(String(20), nullable=False, default="4820194821")
+    company_title = Column(String(200), nullable=False, default="")
+    tax_office = Column(String(100), nullable=False, default="")
+    tax_number = Column(String(20), nullable=False, default="")
     mersis_no = Column(String(50), nullable=True, default="")
     central_registration_no = Column(String(50), nullable=True, default="")
     trade_registry_no = Column(String(50), nullable=True, default="")
 
     # İletişim
-    address = Column(Text, nullable=False, default="Kapalıçarşı Kalpakçılar Cad. No:42, Fatih / İstanbul")
-    phone = Column(String(30), nullable=False, default="0212 522 10 20")
-    email = Column(String(100), nullable=False, default="erdem@goldenguard.uk")
+    address = Column(Text, nullable=False, default="")
+    phone = Column(String(30), nullable=False, default="")
+    email = Column(String(100), nullable=False, default="")
     website = Column(String(100), nullable=True, default="")
 
     # Logo (Base64 olarak saklanır)
@@ -698,7 +729,7 @@ class CompanyProfile(Base):
     default_currency = Column(String(10), default="TRY")
     default_language = Column(String(10), default="TR")
 
-    invoice_footer_note = Column(Text, nullable=True, default="Bu belge Golden Guard ERP sistemi tarafından oluşturulmuştur. 3065 sayılı KDV Kanunu Madde 17/4-g gereği külçe altın ve has altın bedeli KDV'den istisnadır. Yalnızca işçilik bedeli üzerinden %20 KDV hesaplanmıştır.")
+    invoice_footer_note = Column(Text, nullable=True, default="")
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -707,6 +738,7 @@ class CompanyProfile(Base):
 class EInvoice(Base):
     """e-Fatura (UBL-TR) Kayıtları - Tüzel/Vergi No'lu alıcılara kesilen faturalar"""
     __tablename__ = "e_invoices"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_uuid = Column(String(50), unique=True, index=True, nullable=False)
@@ -748,6 +780,7 @@ class EInvoice(Base):
     pdf_path = Column(String(255), nullable=True)
     html_content = Column(Text, nullable=True)
 
+    snapshot_json = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -758,6 +791,7 @@ class EInvoice(Base):
 class EArchiveInvoice(Base):
     """e-Arşiv Fatura Kayıtları - Bireysel (TC No'lu) alıcılara kesilen faturalar"""
     __tablename__ = "e_archive_invoices"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_number = Column(String(50), unique=True, index=True, nullable=False)
@@ -791,6 +825,7 @@ class EArchiveInvoice(Base):
     pdf_path = Column(String(255), nullable=True)
     html_content = Column(Text, nullable=True)
 
+    snapshot_json = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -801,6 +836,7 @@ class EArchiveInvoice(Base):
 class InvoiceItem(Base):
     """Fatura Kalemleri - Hem e-Fatura hem e-Arşiv için ortak kalem tablosu"""
     __tablename__ = "invoice_items"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_type = Column(String(20), nullable=False)  # EINVOICE, EARCHIVE
@@ -845,8 +881,8 @@ class CustomerCart(Base):
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Satış danışmanı
     user_name = Column(String(100), nullable=True)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
-    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"))
 
     # Servis Seansı (opsiyonel)
     session_id = Column(Integer, ForeignKey("service_sessions.id"), nullable=True)
@@ -886,6 +922,7 @@ class CustomerCart(Base):
 class CartItem(Base):
     """Sepet Kalemi - Sepete eklenen her bir ürün"""
     __tablename__ = "cart_items"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     cart_id = Column(Integer, ForeignKey("customer_carts.id"), nullable=False)
@@ -929,6 +966,7 @@ class CartItem(Base):
 class CustomerReminder(Base):
     """Müşteri Hatırlatıcı - Satış danışmanının müşteri için hatırlatma oluşturması"""
     __tablename__ = "customer_reminders"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     cart_id = Column(Integer, ForeignKey("customer_carts.id"), nullable=True)
@@ -966,6 +1004,7 @@ class CustomerReminder(Base):
 class CustomerDemand(Base):
     """Müşteri Talebi - Mağazada bulunamayan / özel istenen modeller"""
     __tablename__ = "customer_demands"
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     cart_id = Column(Integer, ForeignKey("customer_carts.id"), nullable=True)
@@ -975,7 +1014,7 @@ class CustomerDemand(Base):
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     user_name = Column(String(100), nullable=True)
-    branch_id = Column(Integer, ForeignKey("branches.id"), default=1)
+    branch_id = Column(Integer, ForeignKey("branches.id"))
 
     # Talep Detayı
     requested_model = Column(String(200), nullable=False)  # Örn: 14K Baget Taşlı Kelepçe Bilezik
@@ -996,3 +1035,48 @@ class CustomerDemand(Base):
     customer = relationship("Customer", foreign_keys=[customer_id])
     staff = relationship("User", foreign_keys=[user_id])
     branch = relationship("Branch", foreign_keys=[branch_id])
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    id = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=True, index=True)
+    is_master = Column(Boolean, default=False, nullable=False)
+    csrf_token = Column(String(64), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+    key = Column(String(64), primary_key=True)
+    failures = Column(Integer, default=0, nullable=False)
+    window_start = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class InvoiceSequence(Base):
+    __tablename__ = "invoice_sequences"
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False, index=True)
+    value = Column(Integer, default=0, nullable=False)
+    year = Column(Integer, nullable=False)
+    __table_args__ = (UniqueConstraint('tenant_id', 'year'),)
+
+
+class InvoiceSaleClaim(Base):
+    __tablename__ = "invoice_sale_claims"
+    sale_id = Column(Integer, ForeignKey("sales.id"), primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenant_companies.id"), nullable=False)
+    invoice_type = Column(String(20), nullable=False)
+    invoice_id = Column(Integer, nullable=False)
+
+
+class DeviceCredential(Base):
+    __tablename__ = 'device_credentials'
+    id = Column(String(64), primary_key=True)
+    tenant_id = Column(Integer, ForeignKey('tenant_companies.id'), nullable=False, index=True)
+    device_id = Column(Integer, ForeignKey('iot_devices.id'), nullable=False, index=True)
+    revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

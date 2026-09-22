@@ -10,21 +10,36 @@ logger = logging.getLogger("iot_service")
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, tenant_id: int, session_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections[websocket] = (tenant_id, session_id)
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+            self.active_connections.pop(websocket, None)
 
     async def broadcast(self, message: Dict[str, Any]):
+        tenant_id = message.get('tenant_id')
+        if tenant_id is None:
+            return
         text_data = json.dumps(message, default=str)
         dead_connections = []
-        for connection in self.active_connections:
+        for connection, (owner_id, session_id) in list(self.active_connections.items()):
+            if owner_id != tenant_id:
+                continue
             try:
+                from .database import SessionLocal
+                from .auth import ensure_tenant_access
+                with SessionLocal() as db:
+                    session = db.get(models.AuthSession, session_id)
+                    user = db.get(models.User, session.user_id) if session else None
+                    if not session or session.revoked or session.expires_at <= datetime.datetime.utcnow() or not user or not user.is_active:
+                        await connection.close(code=4401)
+                        dead_connections.append(connection)
+                        continue
+                    ensure_tenant_access(db, user)
                 await connection.send_text(text_data)
             except Exception:
                 dead_connections.append(connection)
@@ -40,18 +55,8 @@ async def process_telemetry(db: Session, slot_number: int, current_weight: float
     """
     slot = db.query(models.RackSlot).filter(models.RackSlot.slot_number == slot_number).first()
     if not slot:
-        # Otomatik slot oluştur
-        slot = models.RackSlot(
-            slot_number=slot_number,
-            label=f"Askı #{slot_number}",
-            device_id=device_id,
-            expected_weight=0.0,
-            current_weight=current_weight,
-            status="EMPTY"
-        )
-        db.add(slot)
-        db.commit()
-        db.refresh(slot)
+        from fastapi import HTTPException
+        raise HTTPException(404, 'Cihaz / askı önceden firmaya tanımlanmalıdır.')
 
     now = datetime.datetime.utcnow()
     was_offline = (slot.is_online is False)
@@ -81,7 +86,7 @@ async def process_telemetry(db: Session, slot_number: int, current_weight: float
         db.add(sys_log)
         # Arka planda WebSocket ile istemcilere bildir
         try:
-            await manager.broadcast({
+            await manager.broadcast({"tenant_id": slot.tenant_id,
                 "type": "DEVICE_ONLINE",
                 "slot_number": slot.slot_number,
                 "slot_id": slot.id,
@@ -229,5 +234,5 @@ async def process_telemetry(db: Session, slot_number: int, current_weight: float
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
-    await manager.broadcast(broadcast_data)
+    await manager.broadcast({**broadcast_data, "tenant_id": slot.tenant_id})
     return broadcast_data

@@ -56,7 +56,7 @@ def calculate_cart_totals(cart: models.CustomerCart, db: Session):
     cart.total_vat_amount = round(total_vat, 2)
     cart.total_vat_exempt_amount = round(total_vat_exempt, 2)
     cart.total_labor_cost = round(total_labor, 2)
-    cart.total_payable_amount = round(total_gross + total_vat, 2)
+    cart.total_payable_amount = round(total_gross, 2)
 
     # Canlı kuru al
     try:
@@ -75,37 +75,18 @@ def calculate_item_totals(
     variant: Optional[models.ProductVariant] = None
 ) -> dict:
     """Bir ürün kalemi için fiyat hesaplaması yapar (canlı kur + işçilik + KDV)"""
-    # Canlı kuru al
-    try:
-        rates = exchange_rate_service.get_live_rates()
-        has_rate = rates.get("rates", {}).get("HAS_ALTIN", {}).get("sell", 0)
-    except Exception:
-        has_rate = 0
-
-    weight = variant.weight_grams if variant else product.weight_grams
-    labor = variant.additional_labor if variant else (product.labor_cost or 0)
-
-    # Altın bedeli (KDV istisna)
-    gold_value = weight * has_rate if has_rate > 0 else product.price
-
-    # İşçilik üzerinden %20 KDV
-    vat_amount = round(labor * 0.20, 2)
-
-    # Toplam
-    line_total = round((gold_value + labor - discount_amount) * quantity, 2)
-
-    return {
-        "unit_price": round(gold_value, 2),
-        "labor_cost": round(labor, 2),
-        "vat_rate": 20.0,
-        "vat_amount": round(vat_amount * quantity, 2),
-        "is_vat_exempt": True,
-        "discount_amount": round(discount_amount, 2),
-        "line_total": line_total,
-        "weight_grams": weight,
-        "purity": product.purity,
-        "category": product.category,
-    }
+    from ..invoice_math import money
+    if quantity <= 0 or discount_amount < 0:
+        raise HTTPException(422, 'Miktar pozitif, indirim sıfır veya pozitif olmalıdır.')
+    price = money(product.price)
+    discount = money(discount_amount)
+    if discount > price:
+        raise HTTPException(422, 'İndirim birim satış fiyatını aşamaz.')
+    # Product prices are final VAT-inclusive selling prices. Tax classification belongs to the invoice.
+    return {'unit_price':float(price), 'labor_cost':0, 'vat_rate':0, 'vat_amount':0,
+        'is_vat_exempt':False, 'discount_amount':float(discount), 'line_total':float((price-discount)*quantity),
+        'weight_grams':variant.weight_grams if variant else product.weight_grams,
+        'purity':product.purity,'category':product.category}
 
 
 def log_cart_action(db: Session, level: str, module: str, message: str, user_id: int = None, user_name: str = None, details: dict = None):
@@ -705,62 +686,8 @@ def convert_cart_to_invoice(
     Sepetteki satılmış ürünler için toplu fatura keser.
     Önce satışa dönüştürülmüş olmalı.
     """
-    from .invoices import create_e_invoice, create_e_archive_invoice
+    raise HTTPException(409, 'Fatura Taslakları ekranında her satış için alıcı adresi ve vergi uygulaması girilmelidir.')
 
-    cart = db.query(models.CustomerCart).filter(models.CustomerCart.id == cart_id).first()
-    if not cart:
-        raise HTTPException(status_code=404, detail="Sepet bulunamadı")
-
-    sold_items = [it for it in cart.items if it.is_sold and it.sale_id]
-    if not sold_items:
-        raise HTTPException(status_code=400, detail="Faturalanacak satılmış ürün bulunamadı. Önce satışa dönüştürün.")
-
-    invoices_created = []
-    for item in sold_items:
-        sale = db.query(models.Sale).filter(models.Sale.id == item.sale_id).first()
-        if not sale:
-            continue
-
-        tax_no = invoice_in.customer_tax_number or cart.customer_id or ""
-        email = invoice_in.customer_email or cart.customer_email or ""
-
-        try:
-            if invoice_in.invoice_type == "einvoice" or (invoice_in.invoice_type == "auto" and tax_no and len(str(tax_no)) == 10):
-                inv = create_e_invoice(
-                    schemas.EInvoiceCreate(
-                        sale_id=sale.id,
-                        customer_title=cart.customer_name or "Müşteri",
-                        customer_tax_number=str(tax_no) if tax_no else None,
-                        customer_email=email
-                    ),
-                    current_user, db
-                )
-                invoices_created.append({"type": "EINVOICE", "number": inv.invoice_number})
-            else:
-                inv = create_e_archive_invoice(
-                    schemas.EArchiveInvoiceCreate(
-                        sale_id=sale.id,
-                        customer_name=cart.customer_name or "Müşteri",
-                        customer_id_number=str(tax_no) if tax_no else None,
-                        customer_email=email,
-                        customer_phone=cart.customer_phone
-                    ),
-                    current_user, db
-                )
-                invoices_created.append({"type": "EARCHIVE", "number": inv.invoice_number})
-        except Exception as e:
-            invoices_created.append({"type": "ERROR", "message": str(e)})
-
-    return {
-        "success": True,
-        "message": f"{len(invoices_created)} fatura oluşturuldu.",
-        "invoices": invoices_created
-    }
-
-
-# =========================================================================
-# 4. SEPET GEÇMİŞİ
-# =========================================================================
 
 @router.get("", response_model=List[schemas.CartOut])
 def list_carts(
@@ -1177,3 +1104,5 @@ def get_customer_interest_report(
             for c in cat_interest
         ]
     )
+# Static paths must win over /{cart_id}.
+router.routes.sort(key=lambda route: ("{" in route.path, -len(route.path)))

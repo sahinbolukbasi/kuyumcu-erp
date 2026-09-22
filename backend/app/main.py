@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -10,7 +10,7 @@ import asyncio
 from .database import engine, Base, SessionLocal
 from . import models, iot_service, auth
 from .iot_watchdog import run_iot_watchdog
-from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases, tenants, invoices, cart, devices
+from .routers import products, iot, sales, analytics, auth as auth_router, crm, logs, sessions, inventory, security, legal, branches, rates, purchases, tenants, invoices, cart, devices, module_settings, master_auth
 from . import backup_service
 
 from sqlalchemy import text
@@ -27,7 +27,8 @@ def run_sqlite_migrations():
             "ALTER TABLE products ADD COLUMN tenant_id INTEGER DEFAULT 1",
             "ALTER TABLE sales ADD COLUMN tenant_id INTEGER DEFAULT 1",
             "ALTER TABLE customer_carts ADD COLUMN tenant_id INTEGER DEFAULT 1",
-            "ALTER TABLE rack_slots ADD COLUMN iot_device_id INTEGER REFERENCES iot_devices(id)"
+            "ALTER TABLE rack_slots ADD COLUMN iot_device_id INTEGER REFERENCES iot_devices(id)",
+            "ALTER TABLE iot_devices ADD COLUMN pair_code VARCHAR(6)"
         ]:
             try:
                 conn.execute(text(alter_stmt))
@@ -36,7 +37,8 @@ def run_sqlite_migrations():
                 pass
 
 run_sqlite_migrations()
-Base.metadata.create_all(bind=engine)
+from .migrations import migrate
+migrate(engine)
 
 def seed_initial_data():
     db = SessionLocal()
@@ -646,7 +648,13 @@ def seed_initial_data():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    seed_initial_data()
+    if os.getenv('APP_ENV') == 'production':
+        if not os.getenv('MASTER_PASSWORD_HASH') or not os.getenv('MASTER_TOTP_SECRET') or not os.getenv('ALLOWED_ORIGINS', '').startswith('https://'):
+            raise RuntimeError('Production requires MASTER_PASSWORD_HASH, MASTER_TOTP_SECRET and HTTPS ALLOWED_ORIGINS.')
+    if os.getenv('SEED_DEMO_DATA') == 'true' and os.getenv('APP_ENV') != 'production':
+        seed_initial_data()
+    if os.getenv('ENABLE_NIGHTLY_BACKUP') == 'true':
+        backup_service.run_nightly_backup_scheduler()
     watchdog_task = asyncio.create_task(run_iot_watchdog())
     yield
     watchdog_task.cancel()
@@ -657,39 +665,53 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from .security_middleware import SecurityMiddleware, ALLOWED_ORIGINS
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Tenant-ID", "X-Device-Key"],
 )
 
 upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
 os.makedirs(upload_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+@app.get('/uploads/{tenant_id}/{filename}')
+def private_image(tenant_id: int, filename: str, user=Depends(auth.require_current_user)):
+    from pathlib import Path
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    root = Path(products.UPLOAD_DIR) / str(user.tenant_id)
+    candidate = (root / filename).resolve()
+    if tenant_id != user.tenant_id or candidate.parent != root.resolve() or candidate.suffix.lower() != '.png' or not candidate.is_file():
+        raise HTTPException(404, 'Resim bulunamadı.')
+    return FileResponse(candidate, media_type='image/png', headers={'Cache-Control':'no-store'})
 
+
+app.include_router(master_auth.router)
 app.include_router(auth_router.router)
-app.include_router(products.router)
-app.include_router(iot.router)
-app.include_router(sales.router)
-app.include_router(analytics.router)
-app.include_router(crm.router)
-app.include_router(logs.router)
-app.include_router(sessions.router)
-app.include_router(inventory.router)
+app.include_router(products.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(iot.router, dependencies=[Depends(auth.require_iot_access)])
+app.include_router(sales.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(analytics.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(crm.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(logs.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(sessions.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(inventory.router, dependencies=[Depends(auth.get_current_user)])
 app.include_router(security.router)
-app.include_router(legal.router)
-app.include_router(branches.router)
+app.include_router(legal.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(branches.router, dependencies=[Depends(auth.get_current_user)])
 app.include_router(rates.router)
-app.include_router(purchases.router)
+app.include_router(purchases.router, dependencies=[Depends(auth.get_current_user)])
 app.include_router(tenants.router)
-app.include_router(invoices.router)
-app.include_router(cart.router)
-app.include_router(devices.router)
+app.include_router(invoices.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(cart.router, dependencies=[Depends(auth.get_current_user)])
+app.include_router(devices.router, dependencies=[Depends(auth.require_iot_access)])
+app.include_router(module_settings.router, dependencies=[Depends(auth.require_current_user)])
 
 # Otomatik Gece 03:00 Yedekleme Zamanlayıcısını Başlat
-backup_service.run_nightly_backup_scheduler()
+
 
 @app.get("/")
 def health_check():
@@ -701,11 +723,26 @@ def health_check():
 
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
-    await iot_service.manager.connect(websocket)
+    if websocket.headers.get('origin', '').rstrip('/') not in ALLOWED_ORIGINS:
+        await websocket.close(code=4403)
+        return
+    with SessionLocal() as db:
+        session = auth.resolve_session(db, websocket.cookies.get('gg_session'))
+        user = db.get(models.User, session.user_id) if session else None
+        if not user or not user.is_active or str(user.tenant_id) != websocket.query_params.get('tenant_id'):
+            await websocket.close(code=4401)
+            return
+        try:
+            auth.ensure_tenant_access(db, user)
+        except Exception:
+            await websocket.close(code=4403)
+            return
+        tenant_id, session_id = user.tenant_id, session.id
+    await iot_service.manager.connect(websocket, tenant_id, session_id)
     try:
         while True:
-            data = await websocket.receive_text()
-    except WebSocketDisconnect:
-        iot_service.manager.disconnect(websocket)
-    except Exception:
+            await websocket.receive_text()
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         iot_service.manager.disconnect(websocket)

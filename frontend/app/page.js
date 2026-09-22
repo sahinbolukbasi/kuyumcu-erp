@@ -1,5 +1,7 @@
 'use client';
 
+import { apiFetch as fetch, setTenantContext, clearLegacyStorage } from './lib/api';
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ShieldAlert, 
@@ -329,6 +331,19 @@ export default function Home() {
 
   // Stok Sayfası Şube Filtresi
   const [stockBranchFilter, setStockBranchFilter] = useState('ALL');
+  const [stockViewMode, setStockViewMode] = useState('locations'); // locations, catalog veya detail
+  const [financeSection, setFinanceSection] = useState('overview'); // overview, purchases, inventory, executive
+  const [settingsSection, setSettingsSection] = useState('company'); // company, invoices veya modules
+  const [enabledModules, setEnabledModules] = useState({
+    inventory: true,
+    sales: true,
+    crm: true,
+    management: true,
+    reports: true,
+    iot: true,
+    security: true
+  });
+  const [moduleSettingsStatus, setModuleSettingsStatus] = useState('');
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
   const [newBranchData, setNewBranchData] = useState({ name: '', city: 'İstanbul', address: '', phone: '' });
   const [hourlyTraffic, setHourlyTraffic] = useState([]);
@@ -454,28 +469,109 @@ export default function Home() {
     }
   };
 
-  // Auth Kontrolü
+  // ⛔ Güvenlik: Oturumu cookie'den otomatik canlandırma KALDIRILDI.
+  // Kullanıcı her sayfa yüklemesinde şifresini girmelidir.
   useEffect(() => {
-    const savedToken = localStorage.getItem('kuyumcu_token');
-    const savedUser = localStorage.getItem('kuyumcu_user');
-    if (savedToken && savedUser) {
-      try {
-        setToken(savedToken);
-        const parsed = JSON.parse(savedUser);
-        setCurrentUser(parsed);
-        if (parsed.role === 'ADMIN') {
-          setSelectedBranchFilter('ALL');
-        } else {
-          const bId = parsed.branch_id || 1;
-          setSelectedBranchFilter(bId);
-          setSelectedBranchId(bId);
-        }
-      } catch (e) {
-        localStorage.removeItem('kuyumcu_token');
-        localStorage.removeItem('kuyumcu_user');
-      }
-    }
+    clearLegacyStorage();
+    const invalid = () => { setToken(null); setCurrentUser(null); setTenantContext(null); if (sessionStorage.getItem('gg_had_session')) { sessionStorage.removeItem('gg_had_session'); window.location.reload(); } };
+    window.addEventListener('gg-session-invalid', invalid);
+    return () => { window.removeEventListener('gg-session-invalid', invalid); };
   }, []);
+
+  // Firma bazlı modül görünürlüğünü API'den yükle; localStorage yalnızca geçici fallback'tir.
+  useEffect(() => {
+    if (!currentUser || !token) return;
+    const tenantKey = currentUser.tenant_id || currentUser.company_id || currentUser.id || 'default';
+    const loadModuleSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/settings/modules`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem('kuyumcu_token');
+          localStorage.removeItem('kuyumcu_user');
+          setToken(null);
+          setCurrentUser(null);
+          return;
+        }
+        if (!response.ok) throw new Error('Modül ayarları alınamadı.');
+        const data = await response.json();
+        setEnabledModules(prev => ({ ...prev, ...data.modules }));
+        localStorage.setItem(`kuyumcu_modules_${tenantKey}`, JSON.stringify(data.modules));
+        setModuleSettingsStatus('');
+      } catch (error) {
+        setEnabledModules({ inventory: false, sales: false, crm: false, management: false, reports: false, iot: false, security: false });
+        setModuleSettingsStatus('Modül yetkileri doğrulanamadı; tekrar bağlantı bekleniyor.');
+      }
+    };
+    loadModuleSettings();
+    const refreshTimer = setInterval(loadModuleSettings, 15000);
+    window.addEventListener('focus', loadModuleSettings);
+    return () => {
+      clearInterval(refreshTimer);
+      window.removeEventListener('focus', loadModuleSettings);
+    };
+  }, [currentUser, token]);
+
+  useEffect(() => {
+    const moduleTabs = {
+      inventory: ['stock_locations', 'products', 'product_catalog'],
+      sales: ['sales', 'gold_purchases', 'calculator'],
+      crm: ['crm', 'customer_cart', 'sessions_analytics'],
+      management: ['patron_dashboard', 'management_hub', 'staff_roles', 'staff_team'],
+      reports: ['capital_inventory', 'daily_report', 'chart_view'],
+      iot: ['iot_devices'],
+      security: ['alarms', 'logs', 'security_center', 'stock_audit', 'masak_legal']
+    };
+    if (Object.entries(moduleTabs).some(([key, tabs]) => enabledModules[key] === false && tabs.includes(activeTab))) {
+      setActiveTab('vitrin');
+    }
+  }, [enabledModules, activeTab]);
+
+  const isModuleEnabled = (moduleKey) => enabledModules[moduleKey] !== false;
+
+  const toggleModule = async (moduleKey) => {
+    const nextValue = !isModuleEnabled(moduleKey);
+    const previousModules = enabledModules;
+    const nextModules = { ...enabledModules, [moduleKey]: nextValue };
+    setEnabledModules(nextModules);
+    const tenantKey = currentUser?.tenant_id || currentUser?.company_id || currentUser?.id || 'default';
+    localStorage.setItem(`kuyumcu_modules_${tenantKey}`, JSON.stringify(nextModules));
+    setModuleSettingsStatus('Kaydediliyor...');
+
+    const moduleTabs = {
+      inventory: ['stock_locations', 'products', 'product_catalog'],
+      sales: ['sales', 'gold_purchases', 'calculator'],
+      crm: ['crm', 'customer_cart', 'sessions_analytics'],
+      management: ['patron_dashboard', 'management_hub', 'staff_roles', 'staff_team'],
+      reports: ['capital_inventory', 'daily_report', 'chart_view'],
+      iot: ['iot_devices'],
+      security: ['alarms', 'logs', 'security_center', 'stock_audit', 'masak_legal']
+    };
+    if (!nextValue && moduleTabs[moduleKey]?.includes(activeTab)) {
+      setActiveTab('vitrin');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/settings/modules`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ modules: nextModules })
+      });
+      if (!response.ok) throw new Error('Modül ayarı kaydedilemedi.');
+      const data = await response.json();
+      setEnabledModules(prev => ({ ...prev, ...data.modules }));
+      localStorage.setItem(`kuyumcu_modules_${tenantKey}`, JSON.stringify(data.modules));
+      setModuleSettingsStatus('Modül ayarı kaydedildi.');
+    } catch (error) {
+      setEnabledModules(previousModules);
+      localStorage.setItem(`kuyumcu_modules_${tenantKey}`, JSON.stringify(previousModules));
+      setModuleSettingsStatus(error.message || 'Modül ayarı kaydedilemedi.');
+    }
+  };
 
   // Giriş Yapma
   const handleLogin = async (e) => {
@@ -495,8 +591,9 @@ export default function Home() {
       const data = await res.json();
       setToken(data.access_token);
       setCurrentUser(data.user);
-      localStorage.setItem('kuyumcu_token', data.access_token);
-      localStorage.setItem('kuyumcu_user', JSON.stringify(data.user));
+      clearLegacyStorage();
+      setTenantContext(data.user.tenant_id);
+      sessionStorage.setItem('gg_had_session', 'true');
 
       if (data.user.role === 'ADMIN') {
         setSelectedBranchFilter('ALL');
@@ -513,12 +610,16 @@ export default function Home() {
   };
 
   // Çıkış Yapma
-  const handleLogout = () => {
-    setToken(null);
-    setCurrentUser(null);
-    localStorage.removeItem('kuyumcu_token');
-    localStorage.removeItem('kuyumcu_user');
-    setActiveTab('vitrin');
+  const handleLogout = async () => {
+    const response = await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'POST' });
+    if (response.ok || response.status === 401) {
+      clearLegacyStorage();
+      setTenantContext(null);
+      sessionStorage.removeItem('gg_had_session');
+      window.location.reload();
+    } else {
+      alert('Çıkış tamamlanamadı. Lütfen yeniden deneyiniz.');
+    }
   };
 
   // ================= API VERİ ÇEKME METOTLARI =================
@@ -706,17 +807,21 @@ export default function Home() {
   };
 
   const fetchAlerts = async () => {
+    if (currentUser?.role === 'STAFF') {
+      setAlerts([]);
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/v1/iot/alerts?unresolved_only=true`);
       if (res.ok) {
         const data = await res.json();
-        if (data.length > 0 && alerts.length < data.length) {
+        if (data.length > 0 && alerts.length < data.length && currentUser?.role !== 'STAFF') {
           playAlertSound();
           // En son alarm veren slot için otomatik gramaj eşleme sihirbazını tetikle
           const latestAlert = data[0];
           handleTriggerIdentifyLift(latestAlert.slot_id, latestAlert.weight_lost);
         }
-        setAlerts(data);
+        setAlerts(currentUser?.role === 'STAFF' ? [] : data);
       }
     } catch (e) { console.error("Alerts fetch error", e); }
   };
@@ -1089,6 +1194,17 @@ export default function Home() {
     } catch (e) { console.error("Toggle night mode error", e); }
   };
 
+  const handleUpdateSecurityRule = async (payload) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/security/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) fetchSecurityConfig();
+    } catch (e) { console.error("Security rule update error", e); }
+  };
+
   const handleTriggerPanic = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/v1/security/panic-button`, {
@@ -1333,14 +1449,18 @@ export default function Home() {
 
   // WebSocket Canlı Akış Dinleme
   useEffect(() => {
+    if (!token || !currentUser?.tenant_id) return;
+    let stopped = false;
+    let reconnect;
     let ws;
     const connectWs = () => {
+      if (stopped) return;
       try {
-        ws = new WebSocket(WS_URL);
+        ws = new WebSocket(`${WS_URL}?tenant_id=${encodeURIComponent(currentUser?.tenant_id || "")}`);
         ws.onopen = () => setWsConnected(true);
         ws.onclose = () => {
           setWsConnected(false);
-          setTimeout(connectWs, 3000);
+          if (!stopped) reconnect = setTimeout(connectWs, 3000);
         };
         ws.onmessage = async (event) => {
           try {
@@ -1349,11 +1469,12 @@ export default function Home() {
               fetchSlots();
               fetchAnalytics();
               // Eğer ağırlık eksilmesi varsa gramaj eşleme sihirbazını aç
-              if (data.delta && data.delta > 0.5) {
+              if (data.delta && data.delta > 0.5 && currentUser?.role !== 'STAFF') {
                 handleTriggerIdentifyLift(data.slot_id, data.delta);
               }
             }
             if (data.type === 'SECURITY_ALERT') {
+              if (currentUser?.role === 'STAFF') return;
               playAlertSound();
               fetchAlerts();
               fetchSlots();
@@ -1378,7 +1499,7 @@ export default function Home() {
               fetchSystemLogs();
               if (currentUser?.role === 'ADMIN') fetchStaffPerformance();
             }
-            if (data.type === 'ALERT_RESOLVED') {
+            if (data.type === 'ALERT_RESOLVED' && currentUser?.role !== 'STAFF') {
               fetchAlerts();
               fetchSlots();
               fetchSystemLogs();
@@ -1410,12 +1531,12 @@ export default function Home() {
           }
         };
       } catch (err) {
-        setTimeout(connectWs, 3000);
+        if (!stopped) reconnect = setTimeout(connectWs, 3000);
       }
     };
     connectWs();
-    return () => { if (ws) ws.close(); };
-  }, [token, soundEnabled]);
+    return () => { stopped = true; clearTimeout(reconnect); if (ws) ws.close(); };
+  }, [token, currentUser?.tenant_id, soundEnabled]);
 
   // ================= AKILLI GRAMAJ EŞLEME & ZİMMET İŞLEMLERİ =================
   const handleTriggerIdentifyLift = async (slotId, weightLost) => {
@@ -1947,6 +2068,7 @@ export default function Home() {
 
   // Askı Kalibre Etme
   const handleCalibrate = async (slotId) => {
+    if (currentUser?.role === 'STAFF') return;
     if (!token || currentUser?.role !== 'ADMIN') {
       alert("Sensör kalibrasyonu yalnızca Yönetici (Admin) yetkisindedir.");
       return;
@@ -1965,6 +2087,7 @@ export default function Home() {
 
   // İnceleme İzni
   const handleToggleInspection = async (slotId, currentAuth) => {
+    if (currentUser?.role === 'STAFF') return;
     try {
       const res = await fetch(`${API_BASE}/api/v1/iot/slots/${slotId}/authorize-inspection`, {
         method: 'POST',
@@ -1977,6 +2100,7 @@ export default function Home() {
 
   // Alarm Çözme
   const handleResolveAlert = async (alertId) => {
+    if (currentUser?.role === 'STAFF') return;
     try {
       const res = await fetch(`${API_BASE}/api/v1/iot/alerts/${alertId}/resolve`, {
         method: 'POST',
@@ -2498,8 +2622,8 @@ export default function Home() {
                     return (
                       <button key={roleKey} type="button"
                         onClick={() => {
-                          if (roleKey === 'admin') { setLoginUsername('admin'); setLoginPassword('admin123'); }
-                          else { setLoginUsername('ahmet_kasiyer'); setLoginPassword('123456'); }
+                          setLoginUsername('');
+                          setLoginPassword(''); // ⛔ Hiçbir bilgi otomatik gelmez
                         }}
                         className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200"
                         style={selected ? {background:'linear-gradient(to right,#d4af37,#b89225)',color:'#07080a',boxShadow:'0 0 15px -3px rgba(212,175,55,0.30)'} : {color:'#94a3b8'}}>
@@ -2651,17 +2775,8 @@ export default function Home() {
             </button>
           </div>
 
-          {/* ESP32 Mesh Canlı Telemetri Rozeti */}
-          <div className="mx-3.5 my-2.5 p-2 bg-[#161822] rounded-lg flex items-center justify-between border border-amber-500/30 shadow-inner">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-              </span>
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">ESP32 Mesh Aktif</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">±0.003g · 80Hz</span>
-          </div>
+
+
 
           {/* LOGONUN HEMEN ALTINDA: MAĞAZA SEÇİM ALANI (3 Rol ve Konsolide / Şube Filtresi) */}
           <div className="mx-3.5 mb-3 p-2.5 bg-[#141620] rounded-xl border border-amber-500/40 shadow-md">
@@ -2726,6 +2841,7 @@ export default function Home() {
             </button>
 
             {/* ALARM & GÜVENLİK MERKEZİ (ÇOKLU ALARM YÖNETİMİ) */}
+            {currentUser?.role !== 'STAFF' && isModuleEnabled('security') && (
             <button
               onClick={() => { setActiveTab('alarms'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
@@ -2750,6 +2866,7 @@ export default function Home() {
                 </span>
               )}
             </button>
+            )}
 
             {/* 2. MASAMDAKİ ÜRÜNLER (ZİMMET) */}
             <button
@@ -2772,6 +2889,7 @@ export default function Home() {
             </button>
 
             {/* 3. STOK & FİZİKSEL KONUM TAKİBİ (PRD Modül 3) */}
+            {isModuleEnabled('inventory') && (
             <button
               onClick={() => { setActiveTab('stock_locations'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
@@ -2788,30 +2906,18 @@ export default function Home() {
                 {products.length} Ürün
               </span>
             </button>
-
-            {/* 4. ÜRÜN & VARYANT KATALOĞU (PRD Modül 2) */}
-            <button
-              onClick={() => { setActiveTab('products'); setIsMobileMenuOpen(false); }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
-                activeTab === 'products'
-                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
-                  : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Store className="w-4 h-4 text-yellow-500" />
-                <span>Ürün &amp; Varyant Kataloğu</span>
-              </div>
-            </button>
+            )}
 
             {/* 5. KASA & HIZLI POS SATIŞ (PRD Modül 6) */}
+            {isModuleEnabled('sales') && (
+            <>
             <button
-              onClick={() => { setActiveTab('sales'); setIsMobileMenuOpen(false); }}
+              onClick={() => { setActiveTab('daily_report'); setFinanceSection('overview'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
-                activeTab === 'sales'
+                activeTab === 'daily_report' && financeSection === 'overview'
                   ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
                   : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
-              }`}
+              } hidden`}
             >
               <div className="flex items-center gap-2.5">
                 <ShoppingBag className="w-4 h-4 text-amber-400" />
@@ -2821,12 +2927,12 @@ export default function Home() {
 
             {/* 5.1 ALTIN SATIN ALMA & HURDA KASA */}
             <button
-              onClick={() => { setActiveTab('gold_purchases'); setIsMobileMenuOpen(false); }}
+              onClick={() => { setActiveTab('daily_report'); setFinanceSection('purchases'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
-                activeTab === 'gold_purchases'
+                activeTab === 'daily_report' && financeSection === 'purchases'
                   ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
                   : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
-              }`}
+              } hidden`}
             >
               <div className="flex items-center gap-2.5">
                 <Scale className="w-4 h-4 text-amber-400" />
@@ -2854,8 +2960,12 @@ export default function Home() {
                 Canlı Kur
               </span>
             </button>
+            </>
+            )}
 
             {/* 6. MÜŞTERİ CRM, KAPORA & SERTİFİKA (PRD Modül 7) */}
+            {isModuleEnabled('crm') && (
+            <>
             <button
               onClick={() => { setActiveTab('crm'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
@@ -2874,8 +2984,11 @@ export default function Home() {
                 </span>
               )}
             </button>
+            </>
+            )}
 
             {/* 7. MÜŞTERİ SEPETİ & HİZMET SİSTEMİ */}
+            {isModuleEnabled('crm') && (
             <button
               onClick={() => { setActiveTab('customer_cart'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
@@ -2890,18 +3003,19 @@ export default function Home() {
               </div>
               <span className="text-[10px] font-mono bg-amber-400/20 text-amber-300 px-1 rounded">Servis</span>
             </button>
+            )}
 
 
 
             {/* PATRON & YÖNETİCİ BİLGİ EKRANI (VIP) */}
-            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
+            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && isModuleEnabled('management') && (
               <button
-                onClick={() => { setActiveTab('patron_dashboard'); setIsMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab('daily_report'); setFinanceSection('executive'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
-                  activeTab === 'patron_dashboard'
+                  activeTab === 'daily_report' && financeSection === 'executive'
                     ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 border-amber-300 font-black shadow-lg'
                     : 'bg-gradient-to-r from-amber-500/10 to-amber-500/5 text-amber-300 border-amber-500/40 hover:bg-amber-500/20 font-bold'
-                }`}
+                } hidden`}
               >
                 <div className="flex items-center gap-2.5">
                   <Activity className="w-4 h-4 text-amber-400" />
@@ -2912,7 +3026,7 @@ export default function Home() {
             )}
 
             {/* 7. MAĞAZA YÖNETİMİ & ŞUBELER (PRD Modül 1 - ADMİN & MÜDÜR) */}
-            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
+            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && isModuleEnabled('management') && (
               <button
                 onClick={() => { setActiveTab('management_hub'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
@@ -2929,7 +3043,7 @@ export default function Home() {
             )}
 
             {/* 8. PERSONEL & MAĞAZA YETKİLERİ (PRD Modül 11 - YALNIZCA ADMİN) */}
-            {currentUser?.role === 'ADMIN' && (
+            {currentUser?.role === 'ADMIN' && isModuleEnabled('management') && (
               <button
                 onClick={() => { setActiveTab('staff_roles'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
@@ -2946,44 +3060,43 @@ export default function Home() {
               </button>
             )}
 
-            {/* FIRMA PROFILI & e-FATURA (YALNIZCA ADMIN) */}
+            {/* 8. AYARLAR: FİRMA, FATURA & MODÜLLER */}
             {currentUser?.role === 'ADMIN' && (
               <button
-                onClick={() => { setActiveTab('company_profile'); setIsMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab('settings'); setSettingsSection('company'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
-                  activeTab === 'company_profile'
-                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md'
-                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Building2 className="w-4 h-4 text-emerald-400" />
-                  <span>Firma Profili &amp; e-Fatura</span>
-                </div>
-                <span className="text-[10px] font-mono bg-emerald-400/20 text-emerald-300 px-1 rounded">Admin</span>
-              </button>
-            )}
-
-            {/* e-FATURA & e-ARŞİV LİSTESİ (YALNIZCA ADMIN) */}
-            {currentUser?.role === 'ADMIN' && (
-              <button
-                onClick={() => { setActiveTab('invoice_list'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
-                  activeTab === 'invoice_list'
-                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md'
+                  activeTab === 'settings'
+                    ? 'bg-indigo-500 text-white border-indigo-400 font-bold shadow-md'
                     : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <FileText className="w-4 h-4 text-indigo-400" />
-                  <span>e-Fatura &amp; e-Arşiv Listesi</span>
+                  <Settings className="w-4 h-4 text-indigo-400" />
+                  <span>Firma Ayarları &amp; Modüller</span>
                 </div>
                 <span className="text-[10px] font-mono bg-indigo-400/20 text-indigo-300 px-1 rounded">Admin</span>
               </button>
             )}
 
+            {currentUser?.role === 'ADMIN' && (
+              <button
+                onClick={() => { setActiveTab('settings'); setSettingsSection('invoices'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
+                  activeTab === 'settings' && settingsSection === 'invoices'
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold shadow-md'
+                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <span>Fatura Kes &amp; Fatura Listesi</span>
+                </div>
+                <span className="text-[10px] font-mono bg-emerald-400/20 text-emerald-300 px-1 rounded">Admin</span>
+              </button>
+            )}
+
             {/* MAĞAZA EKİBİM (YALNIZCA MÜDÜR) */}
-            {currentUser?.role === 'MANAGER' && (
+            {currentUser?.role === 'MANAGER' && isModuleEnabled('management') && (
               <button
                 onClick={() => { setActiveTab('staff_team'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left border ${
@@ -3001,14 +3114,14 @@ export default function Home() {
             )}
 
             {/* 9. RAPORLAMA, KÂR-ZARAR & HAS SERMAYE (PRD Modül 8 - ADMİN & MÜDÜR) */}
-            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
+            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && isModuleEnabled('reports') && (
               <button
-                onClick={() => { setActiveTab('capital_inventory'); setIsMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab('daily_report'); setFinanceSection('inventory'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
-                  activeTab === 'capital_inventory'
+                  activeTab === 'daily_report' && financeSection === 'inventory'
                     ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
                     : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
-                }`}
+                  } hidden`}
               >
                 <div className="flex items-center gap-2.5">
                   <Coins className="w-4 h-4 text-amber-400" />
@@ -3018,9 +3131,9 @@ export default function Home() {
             )}
 
             {/* FİNANS & SATIŞ RAPORLARI DASHBOARD (GÜNLÜK / HAFTALIK / AYLIK / YILLIK) */}
-            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && (
+            {['ADMIN', 'MANAGER'].includes(currentUser?.role) && isModuleEnabled('reports') && (
               <button
-                onClick={() => { setActiveTab('daily_report'); setIsMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab('daily_report'); setFinanceSection('overview'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
                   activeTab === 'daily_report'
                     ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
@@ -3029,57 +3142,52 @@ export default function Home() {
               >
                 <div className="flex items-center gap-2.5">
                   <BarChart3 className="w-4 h-4 text-sky-400" />
-                  <span>Finans &amp; Satış Raporları</span>
+                  <span>Analitik &amp; Raporlar</span>
                 </div>
                 <span className="text-[9px] font-mono bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-bold">Dashboard</span>
               </button>
             )}
 
-            {/* 11. DONANIM SİMÜLATÖRÜ (Tüm Roller) */}
-            <button
-              onClick={() => { setActiveTab('simulator'); setIsMobileMenuOpen(false); }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
-                activeTab === 'simulator'
-                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
-                  : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Settings className="w-4 h-4 text-slate-400" />
-                <span>Donanım Simülatörü</span>
-              </div>
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-            </button>
+            {/* 11. IoT CİHAZLARI & ÜRÜN ATAMA (Admin) */}
+            {currentUser?.role === 'ADMIN' && isModuleEnabled('iot') && (
+              <button
+                onClick={() => { setActiveTab('iot_devices'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
+                  activeTab === 'iot_devices'
+                    ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
+                    : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  <span>IoT Cihazları &amp; Ürün Atama</span>
+                </div>
+                <span className="text-[10px] font-mono bg-cyan-400/20 text-cyan-300 px-1 rounded">Admin</span>
+              </button>
+            )}
+
+            {/* 12. SİSTEM LOG & DENETİM KAYITLARI (Admin) */}
+            {currentUser?.role === 'ADMIN' && isModuleEnabled('security') && (
+              <button
+                onClick={() => { setActiveTab('logs'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-left ${
+                  activeTab === 'logs'
+                    ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 border-l-2 border-amber-400 font-bold shadow-sm'
+                    : 'text-slate-300 hover:bg-[#191c26] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <History className="w-4 h-4 text-violet-400" />
+                  <span>Sistem Logları &amp; Denetim</span>
+                </div>
+                <span className="text-[10px] font-mono bg-violet-400/20 text-violet-300 px-1 rounded">Admin</span>
+              </button>
+            )}
 
           </nav>
 
-          {/* Alt Sabit Kısım: Gece VIP Modu + Kullanıcı Profil Kartı */}
+          {/* Alt Sabit Kısım: Firma Profili Kısayolu + Kullanıcı Profil Kartı */}
           <div className="p-3 border-t border-[#242938] flex flex-col gap-2 bg-[#0d0e13]">
-            
-            {/* Gece VIP / Normal Mesai Modu Butonu */}
-            <div className="bg-[#141620] p-1 rounded-lg flex items-center justify-between border border-[#242938]">
-              <button
-                onClick={handleToggleNightMode}
-                className={`flex-1 py-1 px-2 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition ${
-                  securityConfig?.night_mode_active
-                    ? 'bg-rose-950/80 text-rose-300 border border-rose-500/40'
-                    : 'bg-[#1e202b] text-amber-400 shadow-sm'
-                }`}
-                title="Gece / Mesai Dışı Soygun Koruma Modu"
-              >
-                <Moon className="w-3.5 h-3.5 text-amber-400" />
-                <span>{securityConfig?.night_mode_active ? 'Gece Kilitli' : 'Gece VIP'}</span>
-              </button>
-              <button
-                onClick={() => securityConfig?.night_mode_active && handleToggleNightMode()}
-                className={`flex-1 py-1 px-2 rounded text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  !securityConfig?.night_mode_active ? 'text-slate-400' : 'text-slate-500'
-                }`}
-              >
-                <Sun className="w-3.5 h-3.5 text-slate-400" />
-                <span>Mesai Açık</span>
-              </button>
-            </div>
 
             {/* Kullanıcı Profil Kutusu */}
             <div className="p-2.5 bg-[#161822] rounded-xl flex items-center justify-between border border-[#242938] shadow-sm">
@@ -3178,6 +3286,7 @@ export default function Home() {
               </span>
               <h1 className="text-base lg:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 {activeTab === 'vitrin' && 'Canlı Vitrin & Askı Güvenliği'}
+                {activeTab === 'settings' && 'Firma Ayarları & Sistem Modülleri'}
                 {activeTab === 'alarms' && '🚨 Vitrin Güvenlik & Çoklu Alarm Yönetim Merkezi'}
                 {activeTab === 'custody' && 'Masamdaki Ürünler (Zimmet)'}
                 {activeTab === 'sales' && (currentUser?.role === 'STAFF' ? 'Satışlarım & Fişler' : 'Kasa & Hızlı POS Satış')}
@@ -3201,10 +3310,10 @@ export default function Home() {
                 {activeTab === 'stock_audit' && 'Hızlı Sayım & Barkod Mutabakat'}
                 {activeTab === 'masak_legal' && 'MASAK & Resmi Gider Pusulası'}
                 {activeTab === 'management_hub' && 'Şubeler & Logo ERP Entegrasyonu'}
-                {activeTab === 'iot_devices' && 'IoT Sensör & IP Dağıtımı'}
-                {activeTab === 'logs' && 'Sistem & Güvenlik Kayıtları'}
-                {activeTab === 'products' && 'Ürün Kataloğu & Barkodlar'}
-                {activeTab === 'simulator' && 'Donanım Test Simülatörü'}
+                {activeTab === 'iot_devices' && 'IoT Sensör & IP Dağıtımı — Cihaz Yönetimi'}
+                {activeTab === 'logs' && '📋 Sistem & Güvenlik Kayıtları'}
+                {activeTab === 'products' && '💎 Mücevher Sunum & Müşteri Ekranı'}
+                {activeTab === 'product_catalog' && '📑 Ürün & Varyant Kataloğu'}
               </h1>
             </div>
           </div>
@@ -3263,20 +3372,6 @@ export default function Home() {
               )}
             </button>
 
-            {/* HIZLI KASA / SATIŞ BUTONU (HARİCİ POS / MANUEL) */}
-            <button
-              onClick={() => {
-                const availableProduct = products.find(p => p.status !== 'Satıldı') || products[0];
-                if (availableProduct) {
-                  setSelectedProductForSale(availableProduct);
-                }
-                setShowSaleModal(true);
-              }}
-              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 hover:brightness-110 text-slate-950 font-bold text-xs shadow-md transition flex items-center gap-1.5 active:scale-95"
-            >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Hızlı Satış Yap</span>
-            </button>
 
             {/* SİREN SUSTUR / TEST */}
             <button
@@ -3309,7 +3404,7 @@ export default function Home() {
         </header>
 
         {/* 3. ALARM BANNER */}
-        {alerts.length > 0 && (
+        {activeTab !== 'vitrin' && alerts.length > 0 && (
           <div className="no-print alert-banner-blink px-5 py-2.5 text-white flex items-center justify-between shadow-xl z-30">
             <div className="flex items-center gap-3">
               <ShieldAlert className="w-5 h-5 text-white animate-bounce shrink-0" />
@@ -3323,6 +3418,7 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {currentUser?.role !== 'STAFF' && (
               <button
                 type="button"
                 onClick={() => setActiveTab('alarms')}
@@ -3331,6 +3427,8 @@ export default function Home() {
                 <span>🚨</span>
                 <span>Alarmları Yönet ({alerts.length})</span>
               </button>
+              )}
+              {currentUser?.role !== 'STAFF' && (
               <button
                 type="button"
                 onClick={() => handleTriggerIdentifyLift(alerts[0].slot_id, alerts[0].weight_lost)}
@@ -3339,7 +3437,9 @@ export default function Home() {
                 <span>🔍</span>
                 <span>#{alerts[0].slot_id} Ürünü Eşle</span>
               </button>
+              )}
             </div>
+
           </div>
         )}
 
@@ -3347,7 +3447,7 @@ export default function Home() {
         <main className="flex-1 p-4 lg:p-6 w-full max-w-[1600px] mx-auto">
 
         {/* ================= SEKME: ALARM & GÜVENLİK MERKEZİ (ÇOKLU ALARM YÖNETİMİ) ================= */}
-        {activeTab === 'alarms' && (
+        {activeTab === 'alarms' && currentUser?.role !== 'STAFF' && (
           <MultiAlarmManager
             alerts={alerts}
             slots={slots}
@@ -3368,6 +3468,8 @@ export default function Home() {
         {/* ================= SEKME 1: VİTRİN & ÇOKLU ASKI YÖNETİMİ ================= */}
         {activeTab === 'vitrin' && (
           <div className="space-y-6">
+            {true && (
+            <>
             
             {/* KONSOLİDE ŞİRKET VEYA MAĞAZA ÖZET ŞERİDİ */}
             <div className="bg-gradient-to-r from-[#12141c] via-[#161a24] to-[#12141c] border border-amber-500/30 rounded-2xl p-4 shadow-xl">
@@ -3454,49 +3556,6 @@ export default function Home() {
               </div>
             </div>
             
-            {/* STITCH: Donanım Test Konsolu ve Hızlı Simülasyon Şeridi */}
-            <div className="p-2.5 rounded-xl bg-[#161822] border border-[#242938] flex flex-wrap items-center justify-between gap-3 shadow-sm">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Cpu className="w-4 h-4 text-amber-400" />
-                <span className="text-xs uppercase tracking-wider font-bold text-amber-400">Donanım Test Konsolu:</span>
-                <span className="text-xs text-slate-400 font-mono hidden md:inline">ESP32 Mesh Load-Cell Hızlı Tetikleyiciler</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => runSimulator(slots[0]?.slot_number || 1, 'LIFT_UNAUTHORIZED', 28.60)}
-                  className="px-2.5 py-1 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 transition text-xs font-semibold flex items-center gap-1.5 active:scale-95"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Hırsızlık Alarmı (-28.60g)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const firstProd = slots.flatMap(s => s.products || []).find(p => p.status === 'Vitrinde');
-                    if (firstProd) {
-                      handleInitiateCustomerTrial(firstProd);
-                    } else {
-                      setActiveTab('custody');
-                    }
-                  }}
-                  className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 transition text-xs font-semibold flex items-center gap-1.5 active:scale-95"
-                >
-                  <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Yetkili İnceleme / Sunum</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    slots.forEach(s => runSimulator(s.slot_number, 'TARE'));
-                  }}
-                  className="px-2.5 py-1 rounded bg-slate-800 text-slate-200 hover:text-amber-400 hover:bg-slate-700 border border-slate-700 transition text-xs font-semibold flex items-center gap-1.5 active:scale-95"
-                >
-                  <Scale className="w-3.5 h-3.5 text-slate-300" />
-                  <span>Sensör Kalibrasyon (Dara 0.00g)</span>
-                </button>
-              </div>
-            </div>
 
             {/* Grup ve Tip Filtresi */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-[#12141c] p-3 rounded-xl border border-[#242938]">
@@ -3662,6 +3721,7 @@ export default function Home() {
                     {/* Alt İşlemler */}
                     <div className="pt-2 border-t border-[#242938] flex items-center justify-between">
                       <div className="flex items-center gap-1">
+                        {currentUser?.role !== 'STAFF' && (
                         <button
                           onClick={() => handleToggleInspection(slot.id, slot.is_inspection_authorized)}
                           className={`text-[11px] px-2 py-1 rounded font-semibold transition ${
@@ -3670,6 +3730,7 @@ export default function Home() {
                         >
                           {slot.is_inspection_authorized ? '✓ İzinli' : 'İnceleme İzni'}
                         </button>
+                        )}
                         {currentUser?.role === 'ADMIN' && (
                           <button
                             onClick={() => handleCalibrate(slot.id)}
@@ -3681,7 +3742,7 @@ export default function Home() {
                         )}
                       </div>
 
-                      {isAlert && (
+                      {isAlert && currentUser?.role !== 'STAFF' && (
                         <button
                           onClick={() => handleTriggerIdentifyLift(slot.id)}
                           className="btn-danger text-xs py-1 px-2.5 font-bold"
@@ -3694,6 +3755,8 @@ export default function Home() {
                 );
               })}
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -3947,7 +4010,7 @@ export default function Home() {
         )}
 
         {/* ================= SEKME 4: SATIŞLAR & PERFORMANS ================= */}
-        {activeTab === 'sales' && (
+        {false && activeTab === 'sales' && (
           <div className="space-y-6">
             
             {/* HIZLI SATIŞ BAŞLATMA ŞERİDİ (HARİCİ POS / NAKİT) */}
@@ -4123,6 +4186,22 @@ export default function Home() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setStockViewMode('locations')}
+                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition ${stockViewMode === 'locations' ? 'bg-amber-500 text-slate-950' : 'text-slate-300 hover:text-white'}`}
+                  >
+                    Konumlar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStockViewMode('catalog')}
+                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition ${stockViewMode === 'catalog' ? 'bg-indigo-400 text-slate-950' : 'text-slate-300 hover:text-white'}`}
+                  >
+                    Ürünler &amp; Varyantlar
+                  </button>
+                </div>
                 {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && (
                   <button
                     onClick={() => setShowAddLocationModal(true)}
@@ -4144,6 +4223,32 @@ export default function Home() {
               </div>
             </div>
 
+            {stockViewMode === 'detail' && selectedShowcaseProduct && (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setStockViewMode('locations')}
+                  className="btn-secondary text-xs py-2 px-3"
+                >
+                  Stok Listesine Dön
+                </button>
+                <ProductPresentationShowcase
+                  product={selectedShowcaseProduct}
+                  allProducts={products}
+                  onSelectProduct={setSelectedShowcaseProduct}
+                  slots={slots}
+                  goldPrice={goldPrice}
+                  currentUser={currentUser}
+                  onFastSale={(product) => {
+                    setSelectedProductForSale(product);
+                    setShowSaleModal(true);
+                  }}
+                />
+              </div>
+            )}
+
+            {stockViewMode === 'locations' && (
+              <>
             {/* HIZLI KONUM VE STOK METRİKLERİ */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
               <div className="bg-[#12141c] border border-[#242938] p-4 rounded-xl">
@@ -4298,7 +4403,7 @@ export default function Home() {
                         {/* Görsel ve İsim */}
                         <div className="flex items-center gap-3 mb-3">
                           <div
-                            onClick={() => openProductDetailModal(product)}
+                            onClick={() => { setSelectedShowcaseProduct(product); setStockViewMode('detail'); }}
                             className="w-16 h-16 rounded-xl bg-[#0d0f17] border border-[#262c3e] overflow-hidden flex items-center justify-center shrink-0 cursor-pointer group-hover:border-amber-500/40 transition"
                           >
                             {product.image_url ? (
@@ -4312,7 +4417,7 @@ export default function Home() {
                               {product.category} • {product.gold_color || 'Sarı Altın'}
                             </span>
                             <h3
-                              onClick={() => openProductDetailModal(product)}
+                              onClick={() => { setSelectedShowcaseProduct(product); setStockViewMode('detail'); }}
                               className="font-bold text-sm text-white truncate cursor-pointer hover:text-amber-300 transition"
                             >
                               {product.name}
@@ -4358,7 +4463,7 @@ export default function Home() {
                         {/* 2. Sıra: Detay, Sertifika & POS Satış */}
                         <div className="grid grid-cols-3 gap-1">
                           <button
-                            onClick={() => openProductDetailModal(product)}
+                            onClick={() => { setSelectedShowcaseProduct(product); setStockViewMode('detail'); }}
                             className="btn-secondary text-[10px] py-1 px-1.5 flex items-center justify-center gap-1 border-slate-700 text-slate-300 hover:text-white"
                             title="Ürün Detay & Renk/Boy Varyantları"
                           >
@@ -4392,28 +4497,128 @@ export default function Home() {
                   );
                 })}
             </div>
+              </>
+            )}
           </div>
         )}
 
         {/* ================= SEKME: FİNANS, SATIŞ & DÖNEM RAPORLARI (DASHBOARD) ================= */}
         {activeTab === 'daily_report' && (
-          <FinancialReportingDashboard
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2 bg-[#12141c] p-2 rounded-xl border border-[#242938]">
+              {[
+                { id: 'overview', label: 'Satış & Finans' },
+                { id: 'purchases', label: 'Altın Alımı & Personel' },
+                { id: 'inventory', label: 'Has Sermaye & Kritik Stok' },
+                { id: 'executive', label: 'Patron Analitik Kokpiti' }
+              ].map(section => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setFinanceSection(section.id)}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold transition ${financeSection === section.id ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:bg-[#191c26] hover:text-white'}`}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+
+            {financeSection === 'overview' && (
+            <FinancialReportingDashboard
             salesList={salesList}
             purchasesList={goldPurchases}
             analytics={analytics}
             dailyReportsArchive={dailyReportsArchive}
             currentUser={currentUser}
+            capitalReport={capitalReport}
+            criticalStock={criticalStock}
+            products={products}
+            customers={customers}
+            systemLogs={systemLogs}
+            alerts={alerts}
+            branches={branches}
+            onOpenNewSale={() => {
+              const availableProduct = products.find(product => product.status !== 'Satıldı') || products[0];
+              if (availableProduct) setSelectedProductForSale(availableProduct);
+              setShowSaleModal(true);
+            }}
             onSaveDailyReport={handleSaveDailyReport}
             onPrintReport={handlePrintReport}
             onFastSelectSaleForEmail={(s) => {
               setSelectedSaleForEmail(s);
               setShowEmailModal(true);
             }}
-          />
+            />
+            )}
+
+            {financeSection === 'purchases' && (
+              <GoldPurchasesView
+                purchases={goldPurchases}
+                staffSummary={purchaseStaffSummary}
+                currentUser={currentUser}
+                onOpenNewPurchaseModal={() => setShowGoldPurchaseModal(true)}
+                onRefresh={() => { fetchPurchases(); fetchPurchaseStaffSummary(); }}
+                liveRates={liveRates}
+              />
+            )}
+
+            {financeSection === 'inventory' && (
+              <div className="space-y-4">
+                <div className="bg-[#12141c] border border-amber-500/30 rounded-xl p-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Has Sermaye & Kritik Stok</h2>
+                    <p className="text-xs text-slate-400">Sermaye, stok riski ve tedarik kararları finans ekranında birlikte.</p>
+                  </div>
+                  <button type="button" onClick={fetchCapitalReport} className="btn-secondary text-xs py-1.5 px-3">Yenile</button>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[
+                    ['Toplam Has', capitalReport?.total_has_grams, 'gr'],
+                    ['Toplam Sermaye', capitalReport?.total_capital_tl, '₺'],
+                    ['Vitrin Sermayesi', capitalReport?.showcase_capital_tl, '₺'],
+                    ['Kasa Rezervi', capitalReport?.vault_capital_tl, '₺']
+                  ].map(([label, value, unit]) => (
+                    <div key={label} className="luxury-card p-4">
+                      <div className="text-[11px] text-slate-400">{label}</div>
+                      <div className="text-xl font-bold text-amber-400 mt-1">{value == null ? '...' : Number(value).toLocaleString('tr-TR')} {unit}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="luxury-card p-4">
+                  <h3 className="text-sm font-bold text-white mb-3">Kritik Stok ve Tedarik Önerileri</h3>
+                  <div className="space-y-2">
+                    {(criticalStock?.suggested_products || []).slice(0, 8).map(product => (
+                      <div key={product.product_id} className="flex items-center justify-between gap-3 p-3 bg-[#0e1017] rounded-lg text-xs">
+                        <span className="text-white font-semibold">{product.name}</span>
+                        <span className="text-rose-300">Kalan {product.current_stock} • Öneri +{product.suggested_order_qty}</span>
+                      </div>
+                    ))}
+                    {!criticalStock?.suggested_products?.length && <div className="text-xs text-slate-500">Kritik stok bulunmuyor.</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {financeSection === 'executive' && (
+              <PatronAnalyticsDashboard
+                analytics={analytics}
+                profitMarginData={profitMarginData}
+                staffPerformance={staffPerformance}
+                serviceAnalytics={serviceAnalytics}
+                hourlyTraffic={hourlyTraffic}
+                branches={branches}
+                products={products}
+                salesList={salesList}
+                systemLogs={systemLogs}
+                liveRates={liveRates}
+                onRefresh={() => { fetchAnalytics(); fetchProfitMargins(); fetchStaffPerformance(); fetchProducts(); fetchSales(); fetchSystemLogs(); }}
+              />
+            )}
+          </div>
         )}
 
         {/* ================= SEKME: ALTIN SATIN ALMA & HURDA KASA (GERİ ALIM) ================= */}
-        {activeTab === 'gold_purchases' && (
+        {false && activeTab === 'gold_purchases' && (
           <GoldPurchasesView
             purchases={goldPurchases}
             staffSummary={purchaseStaffSummary}
@@ -4442,7 +4647,7 @@ export default function Home() {
         )}
 
         {/* ================= SEKME: PATRON & YÖNETİCİ BİLGİ EKRANI (VIP) ================= */}
-        {activeTab === 'patron_dashboard' && (
+        {false && activeTab === 'patron_dashboard' && (
           <PatronAnalyticsDashboard
             analytics={analytics}
             profitMarginData={profitMarginData}
@@ -4874,11 +5079,43 @@ export default function Home() {
                 });
               })()}
             </div>
+
+            {/* CANLI KUR PANOSU KURAL YÖNETİMİ */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="luxury-card p-4 space-y-3 border-rose-500/30">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-white">Gece Koruma</h3>
+                  <span className={`text-[10px] font-mono ${securityConfig?.night_mode_active ? 'text-rose-300' : 'text-emerald-300'}`}>{securityConfig?.night_mode_active ? 'KİLİTLİ' : 'MESAI'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400">Mesai dışı hareket ve ağırlık eksilmesi alarmı.</p>
+                <button type="button" onClick={handleToggleNightMode} className="btn-secondary w-full justify-center text-xs border-rose-500/40 text-rose-300">
+                  {securityConfig?.night_mode_active ? 'Gece Modunu Kapat' : 'Gece Modunu Aç'}
+                </button>
+              </div>
+
+              <div className="luxury-card p-4 space-y-3 border-amber-500/30">
+                <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-white">İki Kişi Kuralı</h3><span className="text-[10px] font-mono text-amber-300">{securityConfig?.two_man_rule_enabled ? 'AKTİF' : 'PASİF'}</span></div>
+                <p className="text-[11px] text-slate-400">Yüksek tutarlı satışlarda ikinci personel onayı.</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" value={securityConfig?.two_man_threshold || 100000} onChange={(event) => setSecurityConfig(prev => ({ ...prev, two_man_threshold: Number(event.target.value) }))} onBlur={(event) => handleUpdateSecurityRule({ two_man_threshold: Number(event.target.value) })} className="w-full bg-[#0e1017] border border-[#242938] rounded-lg px-2 py-1.5 text-xs text-white" />
+                  <button type="button" onClick={() => handleUpdateSecurityRule({ two_man_rule_enabled: !securityConfig?.two_man_rule_enabled })} className="btn-secondary text-[11px] py-1.5 px-2">{securityConfig?.two_man_rule_enabled ? 'Kapat' : 'Aç'}</button>
+                </div>
+              </div>
+
+              <div className="luxury-card p-4 space-y-3 border-sky-500/30">
+                <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-white">Sahte Altın Toleransı</h3><span className="text-[10px] font-mono text-sky-300">Yük Hücresi</span></div>
+                <p className="text-[11px] text-slate-400">Ürün geri dönüşlerinde izin verilen gram sapması.</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" step="0.01" value={securityConfig?.fake_weight_tolerance_grams || 0.25} onChange={(event) => setSecurityConfig(prev => ({ ...prev, fake_weight_tolerance_grams: Number(event.target.value) }))} onBlur={(event) => handleUpdateSecurityRule({ fake_weight_tolerance_grams: Number(event.target.value) })} className="w-full bg-[#0e1017] border border-[#242938] rounded-lg px-2 py-1.5 text-xs text-white" />
+                  <span className="text-xs text-slate-400">gr</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {/* ================= SEKME 10: ALTIN & MÜCEVHER VİTRİNİ ================= */}
-        {activeTab === 'products' && (
+        {false && activeTab === 'products' && (
           <div className="space-y-6">
             {/* Üst Yönetim & Görünüm Değiştirici Barı */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#12141c] p-4 rounded-2xl border border-[#242938] shadow-lg">
@@ -4897,25 +5134,15 @@ export default function Home() {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
-                {/* Görünüm Değiştirici */}
-                <div className="flex items-center bg-[#0e1017] p-1 rounded-xl border border-white/10 text-xs font-mono">
-                  <button
-                    type="button"
-                    onClick={() => setProductViewMode('showcase')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition font-semibold ${productViewMode === 'showcase' ? 'bg-amber-500 text-black shadow' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    <span>💎</span>
-                    <span>Mücevher Sunum Ekranı</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProductViewMode('catalog')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition font-semibold ${productViewMode === 'catalog' ? 'bg-amber-500 text-black shadow' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    <span>📑</span>
-                    <span>Katalog ({products.length})</span>
-                  </button>
-                </div>
+                {/* Kataloğa Geçiş Kısayolu */}
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('stock_locations'); setStockViewMode('catalog'); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/30 transition"
+                >
+                  <Layers3 className="w-3.5 h-3.5" />
+                  <span>Ürün Kataloğuna Git ({products.length})</span>
+                </button>
 
                 {currentUser?.role === 'ADMIN' && (
                   <>
@@ -5087,205 +5314,209 @@ export default function Home() {
           </div>
         )}
 
-        {/* ================= SEKME 11: IOT TABLA & IP YAPILANDIRMA ================= */}
-        {activeTab === 'iot_devices' && currentUser?.role === 'ADMIN' && (
+        {/* ================= SEKME: 📑 ÜRÜN & VARYANT KATALOĞU (TAM SAYFA) ================= */}
+        {activeTab === 'stock_locations' && stockViewMode === 'catalog' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between bg-[#12141c] p-4 rounded-xl border border-[#242938]">
-              <h2 className="font-cinzel text-lg font-bold text-white">IOT TABLA & IP YAPILANDIRMASI</h2>
-              <button onClick={() => setShowAddSlotModal(true)} className="btn-gold text-xs py-2 px-3.5">
-                <Plus className="w-4 h-4" />
-                <span>Yeni Cihaz Tanımla</span>
-              </button>
+            {/* Sayfa Başlığı */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#12141c] p-4 rounded-2xl border border-[#242938] shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                  <Layers3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-cinzel text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    ÜRÜN & VARYANT KATALOĞU
+                  </h2>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Stoklu ürünler, varyantlar ve fiyat listesi — {products.length} kayıt
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setStockViewMode('locations')}
+                  className="btn-secondary text-xs py-2 px-3"
+                >
+                  Konum Takibine Dön
+                </button>
+                {currentUser?.role === 'ADMIN' && (
+                  <>
+                    <button
+                      onClick={() => setShowBulkImportModal(true)}
+                      className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="hidden md:inline">Toplu İçe Aktar</span>
+                    </button>
+                    <button
+                      onClick={() => setShowAddProductModal(true)}
+                      className="btn-gold text-xs py-2 px-3.5 flex items-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Yeni Mücevher Ekle</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
+            {/* Arama ve Filtre Çubuğu */}
+            <div className="bg-[#12141c] p-4 rounded-xl border border-[#242938] flex flex-col md:flex-row gap-3 items-center justify-between">
+              <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Model adı veya barkod ile ara..."
+                  value={productSearchQuery}
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  className="w-full bg-[#0e1017] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto text-xs font-mono">
+                <span className="text-slate-400 text-[11px] whitespace-nowrap">Kategori:</span>
+                {['ALL', 'Bilezik', 'Yüzük', 'Kolye', 'Küpe', 'Set', 'Bileklik', 'Bileziği', 'Broş', 'Diğer'].map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setProductCategoryFilter(cat)}
+                    className={`px-2.5 py-1 rounded-lg border transition whitespace-nowrap text-[11px] ${productCategoryFilter === cat ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold' : 'border-white/10 text-slate-400 hover:text-white'}`}
+                  >
+                    {cat === 'ALL' ? 'Tümü' : cat}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto text-xs font-mono">
+                <span className="text-slate-400 text-[11px] whitespace-nowrap">Ayar:</span>
+                {['ALL', '24K', '22K', '18K', '14K', '8K'].map(pur => (
+                  <button
+                    key={pur}
+                    type="button"
+                    onClick={() => setProductPurityFilter(pur)}
+                    className={`px-2.5 py-1 rounded-lg border transition whitespace-nowrap text-[11px] ${productPurityFilter === pur ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold' : 'border-white/10 text-slate-400 hover:text-white'}`}
+                  >
+                    {pur === 'ALL' ? 'Tümü' : pur}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ürün Tablosu (tam sayfa liste) */}
             <div className="luxury-card overflow-hidden">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#191c26] text-slate-400 uppercase font-mono text-[10px]">
-                  <tr>
-                    <th className="p-3">Yuva No</th>
-                    <th className="p-3">Etiket & Grup</th>
-                    <th className="p-3">Tür & IP</th>
-                    <th className="p-3">Durum</th>
-                    <th className="p-3">Asılı Modeller (Eşleşmeler)</th>
-                    <th className="p-3">Toplam Yük</th>
-                    <th className="p-3 text-center">İşlemler</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#242938]">
-                  {slots.map(s => {
-                    const isActive = s.is_active !== false;
-                    return (
-                      <tr key={s.id} className={`transition ${!isActive ? 'opacity-60 bg-red-950/10' : 'hover:bg-[#191c26]/50'}`}>
-                        <td className="p-3 font-mono font-bold text-amber-400">
-                          #{s.slot_number}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-[#191c26] text-slate-400 uppercase font-mono text-[10px]">
+                    <tr>
+                      <th className="p-3 w-16">Foto</th>
+                      <th className="p-3">Ürün Adı / Barkod</th>
+                      <th className="p-3">Kategori</th>
+                      <th className="p-3">Ayar & Renk</th>
+                      <th className="p-3">Gram</th>
+                      <th className="p-3">Stok</th>
+                      <th className="p-3">Fiyat</th>
+                      <th className="p-3">Durum</th>
+                      <th className="p-3">İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#242938]">
+                    {filteredCatalogProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center text-slate-500">
+                          Arama kriterlerinize uyan ürün bulunamadı.
                         </td>
+                      </tr>
+                    ) : filteredCatalogProducts.map(p => (
+                      <tr key={p.id} className="hover:bg-[#191c26]/50 transition group">
                         <td className="p-3">
-                          <div className="font-bold text-white">{s.label}</div>
-                          <div className="text-[10px] text-slate-400">{s.group_name}</div>
-                        </td>
-                        <td className="p-3 font-mono">
-                          <div className="text-slate-300 font-semibold">{s.slot_type}</div>
-                          <div className="text-[11px] text-emerald-400 font-bold">{s.ip_address}</div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-col gap-1">
-                            {isActive ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 w-fit">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                Aktif
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-700 text-slate-400 w-fit">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                                Devre Dışı
-                              </span>
-                            )}
-                            {s.is_online ? (
-                              <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Çevrimiçi
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-mono text-slate-500 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span> Ping Yok
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          {(s.products || []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {s.products.map(p => (
-                                <span
-                                  key={p.id}
-                                  className="inline-flex items-center gap-1.5 bg-[#12141c] border border-amber-500/30 text-amber-200 text-[10px] px-2 py-0.5 rounded"
-                                >
-                                  <span>{p.name.slice(0, 20)}.. ({p.weight_grams}g)</span>
-                                  <button
-                                    title="Eşleşmeyi Kaldır (Askıdan Ayır)"
-                                    onClick={() => handleAssignProduct(s.id, p.id, 'REMOVE')}
-                                    className="text-red-400 hover:text-red-300 font-bold ml-1"
-                                  >
-                                    ✕
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
+                          {p.image_url ? (
+                            <img src={p.image_url} alt={p.name} className="w-12 h-12 object-cover rounded-lg border border-[#242938] group-hover:border-amber-500/40 transition" />
                           ) : (
-                            <span className="text-slate-500 italic text-[11px]">Asılı ürün yok (Boş)</span>
+                            <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                              <Sparkles className="w-5 h-5" />
+                            </div>
                           )}
                         </td>
-                        <td className="p-3 font-mono font-bold text-amber-400 whitespace-nowrap">
-                          {s.expected_weight} gr
+                        <td className="p-3">
+                          <div className="font-bold text-white group-hover:text-amber-300 transition">{p.name}</div>
+                          <div className="text-[10px] font-mono text-slate-500 mt-0.5">{p.barcode || '—'}</div>
+                          {p.has_stones && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950/60 text-indigo-300 font-mono border border-indigo-500/30">
+                              💎 {p.diamond_carat ? `${p.diamond_carat} ct` : 'Pırlanta'}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* Canlı IP Test & Teşhis */}
+                        <td className="p-3 text-slate-300 font-semibold">{p.category}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {p.purity}
+                          </span>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{p.gold_color || 'Sarı Altın'}</div>
+                        </td>
+                        <td className="p-3 font-mono text-slate-200">{p.weight_grams} gr</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold ${(p.stock_quantity || 1) > 0 ? 'bg-emerald-950/60 text-emerald-400' : 'bg-rose-950/60 text-rose-400'}`}>
+                            {p.stock_quantity || 1} adet
+                          </span>
+                        </td>
+                        <td className="p-3 font-display font-bold text-amber-400">
+                          {p.price?.toLocaleString('tr-TR')} ₺
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            p.status === 'Vitrinde' ? 'bg-emerald-950/60 text-emerald-400' :
+                            p.status === 'Zimmette' ? 'bg-amber-950/60 text-amber-400' :
+                            'bg-slate-800 text-slate-400'
+                          }`}>
+                            {p.status || 'Stokta'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5">
                             <button
-                              onClick={() => handlePingDevice(s)}
-                              className="text-[10px] py-1 px-2.5 rounded bg-blue-950/50 border border-blue-500/50 text-blue-300 hover:bg-blue-900/70 transition font-semibold flex items-center gap-1"
-                              title="Cihaz IP'sine Canlı İstek Gönder ve Teşhis Et"
+                              type="button"
+                              onClick={() => { setSelectedShowcaseProduct(p); setStockViewMode('detail'); }}
+                              className="text-[11px] px-2 py-1 rounded bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30 font-semibold transition"
                             >
-                              <span>📡</span>
-                              <span>IP Test</span>
+                              Detay
                             </button>
-
-                            {/* Devre Dışı Bırak / Aktif Et */}
-                            <button
-                              onClick={() => handleToggleSlotActive(s.id)}
-                              title={isActive ? "Cihazı Devre Dışı Bırak" : "Cihazı Aktif Et"}
-                              className={`text-[10px] py-1 px-2 rounded border font-semibold transition ${
-                                isActive
-                                  ? 'bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/50'
-                                  : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50'
-                              }`}
-                            >
-                              {isActive ? 'Devre Dışı Bırak' : 'Aktif Et'}
-                            </button>
-
-                            {/* Düzenle & Eşle */}
-                            <button
-                              onClick={() => handleOpenEditDevice(s)}
-                              className="btn-secondary text-[10px] py-1 px-2"
-                              title="Cihaz Ayarları & Ürün Eşle"
-                            >
-                              Düzenle / Eşle
-                            </button>
-
-                            {/* Cihazı Kaldır (Sil) */}
-                            <button
-                              onClick={() => handleDeleteSlot(s.id, s.slot_number)}
-                              className="text-[10px] py-1 px-2 rounded bg-red-950/40 border border-red-500/40 text-red-400 hover:bg-red-900/60 transition font-semibold"
-                              title="Cihazı Sistemden Kaldır"
-                            >
-                              Kaldır
-                            </button>
+                            {p.status !== 'Satıldı' && (
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedProductForSale(p); setShowSaleModal(true); }}
+                                className="btn-gold text-[11px] py-1 px-2 font-bold"
+                              >
+                                Sat
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Alt Özet */}
+              <div className="px-4 py-3 bg-[#0e1017] border-t border-[#242938] flex items-center justify-between text-[11px] font-mono text-slate-400">
+                <span>{filteredCatalogProducts.length} ürün listeleniyor (toplam {products.length})</span>
+                <span>Toplam Stok Değeri: <strong className="text-amber-400">{filteredCatalogProducts.reduce((s, p) => s + (p.price || 0) * (p.stock_quantity || 1), 0).toLocaleString('tr-TR')} ₺</strong></span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ================= SEKME 12: SİMÜLATÖR (DELTA GRAMAJ TESTLİ) ================= */}
-        {activeTab === 'simulator' && (
-          <div className="space-y-6">
-            <div className="bg-[#12141c] p-4 rounded-xl border border-[#242938]">
-              <h2 className="font-cinzel text-lg font-bold text-white">IOT YÜK HÜCRESİ VE ÇOKLU ASKI SİMÜLATÖRÜ</h2>
-              <p className="text-xs text-slate-400">
-                Askıdan belirli bir gramajdaki bileziği kaldırıp akıllı gramaj eşleme ve alarm sihirbazını test edin
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {slots.map(s => (
-                <div key={s.id} className="luxury-card p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-sm text-white">#{s.slot_number} {s.label}</div>
-                    <span className="text-xs font-mono text-amber-400 font-bold">{s.current_weight.toFixed(2)} gr</span>
-                  </div>
-
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    Asılı: {(s.products || []).map(p => `${p.name.slice(0, 15)}.. (${p.weight_grams}g)`).join(' + ') || 'Yok'}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <button
-                      onClick={() => runSimulator(s.slot_number, 'LIFT_UNAUTHORIZED', 28.60)}
-                      className="btn-danger justify-center text-[11px] py-1.5"
-                    >
-                      🚨 28.60g Bilezik Kaldır
-                    </button>
-                    <button
-                      onClick={() => runSimulator(s.slot_number, 'LIFT_UNAUTHORIZED', 14.20)}
-                      className="btn-danger justify-center text-[11px] py-1.5"
-                    >
-                      🚨 14.20g Bilezik Kaldır
-                    </button>
-                    <button
-                      onClick={() => runSimulator(s.slot_number, 'RETURN_PRODUCT')}
-                      className="btn-secondary justify-center text-[11px] py-1.5"
-                    >
-                      ↺ Askıya Geri Koy
-                    </button>
-                    <button
-                      onClick={() => runSimulator(s.slot_number, 'TARE')}
-                      className="btn-secondary justify-center text-[11px] py-1.5"
-                    >
-                      0.00 Dara
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* ================= SEKME: 📡 IoT CİHAZ YÖNETİMİ & ÜRÜN ATAMA ================= */}
+        {activeTab === 'iot_devices' && currentUser?.role === 'ADMIN' && (
+          <DeviceManager
+            currentUser={currentUser}
+            apiBase={API_BASE}
+            token={token}
+            products={products}
+            branches={branches}
+          />
         )}
 
         {/* ================= SEKME: HAS & SERMAYE RAPORU & KRİTİK STOK ================= */}
-        {activeTab === 'capital_inventory' && (
+        {false && activeTab === 'capital_inventory' && (
           <div className="space-y-6">
             {/* Üst Başlık & ESL Güncelleme */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#12141c] p-4 rounded-xl border border-[#242938]">
@@ -6094,6 +6325,40 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Şube Bazlı Stok Dağılım Grafiği */}
+            <div className="luxury-card p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-cinzel text-sm font-bold text-white">ŞUBE BAZLI STOK DAĞILIMI</h3>
+                  <p className="text-[11px] text-slate-400 mt-1">Her mağazanın kayıtlı ürün adedi ve toplam gramajı</p>
+                </div>
+                <BarChart3 className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div className="space-y-3">
+                {branches.map(branch => {
+                  const branchProducts = products.filter(product => product.branch_id === branch.id);
+                  const branchGrams = branchProducts.reduce((total, product) => total + (product.weight_grams || 0), 0);
+                  const maximumGrams = Math.max(...branches.map(item => products.filter(product => product.branch_id === item.id).reduce((total, product) => total + (product.weight_grams || 0), 0)), 1);
+                  return (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      onClick={() => setSelectedBranchDetailModal(branch)}
+                      className="w-full text-left group"
+                    >
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-200 font-semibold group-hover:text-amber-300">{branch.name}</span>
+                        <span className="text-slate-400 font-mono">{branchProducts.length} ürün • {branchGrams.toFixed(1)} gr</span>
+                      </div>
+                      <div className="h-2 bg-[#0e1017] rounded-full overflow-hidden border border-[#242938]">
+                        <div className="h-full bg-gradient-to-r from-indigo-500 to-amber-400 rounded-full" style={{ width: `${Math.max(3, (branchGrams / maximumGrams) * 100)}%` }} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Şubeler Listesi & Stok Transferi */}
             <div className="luxury-card p-5 space-y-4">
               <div className="flex items-center justify-between">
@@ -6275,6 +6540,7 @@ export default function Home() {
                             >
                               <option value="ADMIN">👑 Admin (Şirket Sahibi / GM)</option>
                               <option value="MANAGER">🏬 Mağaza Müdürü</option>
+                              <option value="ALARM_MANAGER">🚨 Alarm Sorumlusu</option>
                               <option value="STAFF">👤 Satış Danışmanı (Personel)</option>
                             </select>
                           </td>
@@ -6387,23 +6653,76 @@ export default function Home() {
           </div>
         )}
 
-        {/* ================= SEKME: 🏢 FIRMA PROFILI & e-FATURA AYARLARI (YALNIZCA ADMIN) ================= */}
-        {activeTab === 'company_profile' && currentUser?.role === 'ADMIN' && (
-          <CompanyProfileManager
-            currentUser={currentUser}
-            apiBase={API_BASE}
-            token={token}
-          />
-        )}
+        {/* ================= SEKME: FİRMA AYARLARI, FATURA & MODÜLLER ================= */}
+        {activeTab === 'settings' && currentUser?.role === 'ADMIN' && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2 bg-[#12141c] p-2 rounded-xl border border-[#242938]">
+              {[
+                { id: 'company', label: 'Firma Profili', icon: Building2 },
+                { id: 'invoices', label: 'e-Fatura & e-Arşiv', icon: FileText }
+              ].map(section => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setSettingsSection(section.id)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${settingsSection === section.id ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:bg-[#191c26] hover:text-white'}`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {section.label}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* ================= SEKME: 📄 e-FATURA & e-ARŞİV LİSTESİ (YALNIZCA ADMIN) ================= */}
-        {activeTab === 'invoice_list' && currentUser?.role === 'ADMIN' && (
-          <InvoiceManager
-            currentUser={currentUser}
-            apiBase={API_BASE}
-            token={token}
-            salesList={salesList}
-          />
+            {settingsSection === 'company' && (
+              <CompanyProfileManager currentUser={currentUser} apiBase={API_BASE} token={token} />
+            )}
+
+            {settingsSection === 'invoices' && (
+              <InvoiceManager currentUser={currentUser} apiBase={API_BASE} token={token} salesList={salesList} />
+            )}
+
+            {false && settingsSection === 'modules' && (
+              <div className="space-y-4">
+                <div className="bg-[#12141c] border border-indigo-500/30 rounded-2xl p-5">
+                  <h2 className="text-lg font-bold text-white">Firma Bazlı Modül Yönetimi</h2>
+                  <p className="text-xs text-slate-400 mt-1">Kullanmadığınız panelleri firmanız için kapatın. Tercihler bu firma hesabında saklanır.</p>
+                  {moduleSettingsStatus && (
+                    <p className={`text-xs mt-3 ${moduleSettingsStatus.includes('kaydedildi') ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      {moduleSettingsStatus}
+                    </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[
+                    { id: 'inventory', label: 'Stok & Ürün Yönetimi', description: 'Stok konumları, ürünler ve varyantlar' },
+                    { id: 'sales', label: 'Satış & Kasa', description: 'POS, altın alımı ve hesaplama' },
+                    { id: 'crm', label: 'Müşteri & Hizmet', description: 'CRM, kapora, sepet ve hizmet seansları' },
+                    { id: 'management', label: 'Mağaza Yönetimi', description: 'Şubeler, personel ve yetkiler' },
+                    { id: 'reports', label: 'Raporlama & Finans', description: 'Ciro, sermaye ve finans panelleri' },
+                    { id: 'iot', label: 'IoT Cihazları', description: 'Sensör, askı ve cihaz yönetimi' },
+                    { id: 'security', label: 'Güvenlik & Denetim', description: 'Alarmlar, loglar ve güvenlik kontrolleri' }
+                  ].map(module => (
+                    <div key={module.id} className="flex items-center justify-between gap-4 bg-[#12141c] border border-[#242938] rounded-xl p-4">
+                      <div>
+                        <div className="text-sm font-semibold text-white">{module.label}</div>
+                        <div className="text-[11px] text-slate-400 mt-1">{module.description}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleModule(module.id)}
+                        className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${isModuleEnabled(module.id) ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                      >
+                        {isModuleEnabled(module.id) ? 'Açık' : 'Kapalı'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
       </main>
@@ -7352,6 +7671,7 @@ export default function Home() {
                     <>
                       <option value="ADMIN">👑 Admin (Şirket Sahibi / GM)</option>
                       <option value="MANAGER">🏬 Mağaza Müdürü</option>
+                      <option value="ALARM_MANAGER">🚨 Alarm Sorumlusu</option>
                     </>
                   )}
                   <option value="STAFF">👤 Satış Danışmanı (Kasiyer / Personel)</option>
@@ -7716,6 +8036,17 @@ export default function Home() {
                 </button>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedBranchFilter(selectedBranchDetailModal.id.toString());
+                      setSelectedBranchDetailModal(null);
+                      setStockViewMode('locations');
+                      setActiveTab('stock_locations');
+                    }}
+                    className="btn-secondary text-xs py-2 px-3 border-emerald-500/40 text-emerald-300 font-bold"
+                  >
+                    Mağaza Stoğunu Aç
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowEditDeviceModal(false)}

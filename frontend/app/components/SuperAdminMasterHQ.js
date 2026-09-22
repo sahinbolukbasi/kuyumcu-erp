@@ -1,5 +1,7 @@
 'use client';
 
+import { apiFetch as fetch } from '../lib/api';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, 
@@ -35,12 +37,22 @@ import {
   Percent
 } from 'lucide-react';
 
+async function requireSuccess(response) {
+  if (response.ok) return;
+  const data = await response.json().catch(() => ({}));
+  const detail = typeof data.detail === 'string' ? data.detail : 'İşlem tamamlanamadı.';
+  throw new Error(`${detail} (HTTP ${response.status})`);
+}
+
 export default function SuperAdminMasterHQ({
   currentUser,
   apiBase,
   token
 }) {
   const [tenants, setTenants] = useState([]);
+  const [editCompany, setEditCompany] = useState(null);
+  const [error, setError] = useState('');
+  const [moduleSaving, setModuleSaving] = useState(false);
   const [costAnalytics, setCostAnalytics] = useState(null);
   const [backupsList, setBackupsList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +61,16 @@ export default function SuperAdminMasterHQ({
   // Modal State'leri
   const [showNewTenantModal, setShowNewTenantModal] = useState(false);
   const [showEditLicenseModal, setShowEditLicenseModal] = useState(null);
+  const [showModuleModal, setShowModuleModal] = useState(null);
+  const [moduleConfig, setModuleConfig] = useState({
+    inventory: true,
+    sales: true,
+    crm: true,
+    management: true,
+    reports: true,
+    iot: true,
+    security: true
+  });
   const [welcomeCardData, setWelcomeCardData] = useState(null);
   
   // Arama & Filtre
@@ -63,6 +85,7 @@ export default function SuperAdminMasterHQ({
   const fetchSaaSData = async () => {
     if (!token) return;
     setLoading(true);
+    setError('');
     try {
       const [tRes, cRes, bRes] = await Promise.all([
         fetch(`${apiBase}/api/v1/saas/tenants`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -70,11 +93,14 @@ export default function SuperAdminMasterHQ({
         fetch(`${apiBase}/api/v1/saas/backups`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
-      if (tRes.ok) setTenants(await tRes.json());
+      await requireSuccess(tRes);
+      const companies = await tRes.json();
+      setTenants(companies);
+      setShowModuleModal(previous => previous ? companies.find(t => t.id === previous.id) || null : null);
       if (cRes.ok) setCostAnalytics(await cRes.json());
       if (bRes.ok) setBackupsList(await bRes.json());
     } catch (e) {
-      console.error("SaaS HQ Fetch Error", e);
+      setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -82,7 +108,7 @@ export default function SuperAdminMasterHQ({
 
   useEffect(() => {
     fetchSaaSData();
-  }, [token]);
+  }, [token, apiBase]);
 
   // Manuel Canlı Yedek Tetikleme
   const handleTriggerBackup = async (tenantId = null) => {
@@ -118,11 +144,56 @@ export default function SuperAdminMasterHQ({
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
-        fetchSaaSData();
-      }
+      await requireSuccess(res);
+      await fetchSaaSData();
     } catch (e) {
       alert("Durum değiştirilemedi: " + e.message);
+    }
+  };
+
+  const handleOpenModuleModal = async (tenant) => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/saas/tenants/${tenant.id}/modules`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await requireSuccess(res);
+      const data = await res.json();
+      setModuleConfig(data.modules);
+      setShowModuleModal(tenant);
+    } catch (e) {
+      alert('Firma modülleri alınamadı: ' + e.message);
+    }
+  };
+
+  const handleSaveTenantModules = async () => {
+    if (!showModuleModal || moduleSaving) return;
+    setModuleSaving(true);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/saas/tenants/${showModuleModal.id}/modules`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(moduleConfig)
+      });
+      await requireSuccess(res);
+      setShowModuleModal(null);
+      alert('Firma modülleri Master HQ üzerinden güncellendi.');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setModuleSaving(false);
+    }
+  };
+
+  const handleDeleteCompany = async (tenant) => {
+    if (!confirm(`${tenant.company_name} silinsin mi? Firma erişimi kapatılır ve listeden kaldırılır. Geçmiş işlem kayıtları korunur.`)) return;
+    try {
+      const response = await fetch(`${apiBase}/api/v1/saas/tenants/${tenant.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+      });
+      await requireSuccess(response);
+      await fetchSaaSData();
+    } catch (e) {
+      alert(e.message);
     }
   };
 
@@ -150,6 +221,7 @@ export default function SuperAdminMasterHQ({
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="p-3 rounded-lg bg-rose-500/15 text-rose-300">{error}</p>}
       
       {/* ================= ÜST MASTER HQ BANNERI ================= */}
       <div className="bg-gradient-to-r from-[#0d111a] via-[#161d2d] to-[#0d111a] p-5 lg:p-7 rounded-3xl border border-amber-500/50 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative overflow-hidden">
@@ -483,6 +555,8 @@ export default function SuperAdminMasterHQ({
                           {/* Aksiyon Butonları */}
                           <td className="py-3 px-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5">
+                              <button type="button" onClick={() => setEditCompany(tenant)} className="btn-secondary py-1 px-2.5 text-[11px]">Firma Düzenle</button>
+                              <button type="button" onClick={() => handleDeleteCompany(tenant)} className="btn-secondary py-1 px-2.5 text-[11px] text-rose-300">Sil</button>
                               {/* Askıya Al / Aç */}
                               <button
                                 type="button"
@@ -510,6 +584,14 @@ export default function SuperAdminMasterHQ({
                                 className="btn-secondary py-1 px-2.5 text-[11px] font-semibold text-slate-300 hover:text-white"
                               >
                                 <span>Kotaları Düzenle</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenModuleModal(tenant)}
+                                className="p-1.5 rounded-lg border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/15 transition"
+                                title="Firma modüllerini yönet"
+                              >
+                                <Layers className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
@@ -708,6 +790,8 @@ export default function SuperAdminMasterHQ({
       )}
 
       {/* ================= MODAL: YENİ MÜŞTERİ FİRMA KUR & LİSANS VER ================= */}
+      {editCompany && <EditCompanyModal tenant={editCompany} apiBase={apiBase} token={token}
+        onClose={() => setEditCompany(null)} onSuccess={() => { setEditCompany(null); fetchSaaSData(); }} />}
       {showNewTenantModal && (
         <NewTenantModal
           onClose={() => setShowNewTenantModal(false)}
@@ -732,6 +816,19 @@ export default function SuperAdminMasterHQ({
           }}
           apiBase={apiBase}
           token={token}
+        />
+      )}
+
+      {showModuleModal && (
+        <ModuleControlModal
+          saving={moduleSaving}
+          tenant={showModuleModal}
+          modules={moduleConfig}
+          onChange={(key) => setModuleConfig(prev => ({ ...prev, [key]: !prev[key] }))}
+          onClose={() => setShowModuleModal(null)}
+          onSave={handleSaveTenantModules}
+          onBackup={() => handleTriggerBackup(showModuleModal.id)}
+          onToggleStatus={() => handleToggleTenantStatus(showModuleModal.id)}
         />
       )}
 
@@ -1132,21 +1229,87 @@ function NewTenantModal({ onClose, onSuccess, apiBase, token }) {
 }
 
 // -----------------------------------------------------------------------------
+// MASTER HQ FİRMA MODÜL KONTROL MODALI
+// -----------------------------------------------------------------------------
+function ModuleControlModal({ saving, tenant, modules, onChange, onClose, onSave, onBackup, onToggleStatus }) {
+  const moduleLabels = {
+    inventory: ['Stok & Ürün', 'Stok, ürün, varyant ve fiziksel konum yönetimi'],
+    sales: ['Satış & Kasa', 'POS, altın alımı ve kasa işlemleri'],
+    crm: ['CRM & Hizmet', 'Müşteri, kapora, sepet ve hizmet seansları'],
+    management: ['Mağaza Yönetimi', 'Şube, personel ve yönetici panelleri'],
+    reports: ['Analitik & Raporlar', 'Finans, sermaye, stok ve performans raporları'],
+    iot: ['IoT Telemetri', 'Askı, sensör, cihaz ve canlı vitrin takibi'],
+    security: ['Güvenlik', 'Alarm, gece modu, log ve güvenlik kuralları']
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+      <div className="bg-[#12151f] border border-indigo-500/50 rounded-2xl w-full max-w-3xl shadow-2xl p-5 space-y-4 text-xs max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-[#242c3f] pb-3">
+          <div>
+            <h3 className="font-bold text-white text-base">{tenant.company_name} • Firma Yönetim Merkezi</h3>
+            <span className="text-[10px] font-mono text-indigo-300">{tenant.company_code} • Master HQ tarafından yönetilir</span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="bg-[#0e1017] border border-[#242c3f] rounded-lg p-3"><span className="text-slate-500 block">Yetkili</span><strong className="text-white">{tenant.owner_name}</strong></div>
+          <div className="bg-[#0e1017] border border-[#242c3f] rounded-lg p-3"><span className="text-slate-500 block">İletişim</span><strong className="text-white">{tenant.contact_phone || 'Kayıt yok'}</strong></div>
+          <div className="bg-[#0e1017] border border-[#242c3f] rounded-lg p-3"><span className="text-slate-500 block">Lisans</span><strong className={tenant.license?.status === 'ACTIVE' ? 'text-emerald-300' : 'text-rose-300'}>{tenant.license?.status || 'Bilinmiyor'}</strong></div>
+          <div className="bg-[#0e1017] border border-[#242c3f] rounded-lg p-3"><span className="text-slate-500 block">Kalan süre</span><strong className="text-amber-300">{tenant.license?.days_remaining || 0} gün</strong></div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3">
+          <div className="flex gap-4 text-[11px] text-slate-300">
+            <span>Yönetici: <strong className="text-white">{tenant.current_admin_count || 0}/{tenant.license?.max_admin_count || 0}</strong></span>
+            <span>Personel: <strong className="text-white">{tenant.current_staff_count || 0}/{tenant.license?.max_staff_count || 0}</strong></span>
+            <span>Aylık maliyet: <strong className="text-rose-300">${tenant.estimated_server_cost_usd?.toFixed(2)}</strong></span>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={onBackup} className="btn-secondary text-[11px] py-1.5 px-2.5">Firma Yedeği</button>
+            <button type="button" onClick={onToggleStatus} className="btn-secondary text-[11px] py-1.5 px-2.5">Lisansı {tenant.is_active ? 'Askıya Al' : 'Aç'}</button>
+          </div>
+        </div>
+        <div className="text-xs font-bold text-white border-b border-[#242c3f] pb-2">Bağımsız Modül Lisansları</div>
+        <div className="space-y-2">
+          {Object.entries(moduleLabels).map(([key, [label, description]]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onChange(key)}
+              className="w-full flex items-center justify-between gap-4 bg-[#0e1017] border border-[#242c3f] rounded-xl p-3 text-left hover:border-indigo-400/60 transition"
+            >
+              <span><strong className="text-white block">{label}</strong><small className="text-slate-400">{description}</small></span>
+              <span className={`px-2.5 py-1 rounded-lg font-bold ${modules[key] ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                {modules[key] ? 'AÇIK' : 'KAPALI'}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[#242c3f] pt-3">
+          <button type="button" onClick={onClose} className="btn-secondary text-xs">İptal</button>
+          <button type="button" onClick={onSave} disabled={saving} className="btn-gold text-xs">{saving ? 'Kaydediliyor...' : 'Modülleri Kaydet'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // LİSANS VE KOTA DÜZENLEME MODALI
 // -----------------------------------------------------------------------------
 function EditLicenseModal({ tenant, onClose, onSuccess, apiBase, token }) {
   const lic = tenant.license;
   const [planType, setPlanType] = useState(lic?.plan_type || 'YEARLY');
   const [billingCycle, setBillingCycle] = useState(lic?.billing_cycle || 'YEARLY');
-  const [subscriptionFee, setSubscriptionFee] = useState(lic?.subscription_fee || 48000);
+  const [subscriptionFee, setSubscriptionFee] = useState(lic?.subscription_fee ?? 48000);
   const [status, setStatus] = useState(lic?.status || 'ACTIVE');
   const [extendMonths, setExtendMonths] = useState(0);
 
   // Kotalar
-  const [maxAdminCount, setMaxAdminCount] = useState(lic?.max_admin_count || 2);
-  const [maxStaffCount, setMaxStaffCount] = useState(lic?.max_staff_count || 5);
-  const [maxBranchesCount, setMaxBranchesCount] = useState(lic?.max_branches_count || 2);
-  const [maxShowcaseSlots, setMaxShowcaseSlots] = useState(lic?.max_showcase_slots || 100);
+  const [maxAdminCount, setMaxAdminCount] = useState(lic?.max_admin_count ?? 2);
+  const [maxStaffCount, setMaxStaffCount] = useState(lic?.max_staff_count ?? 5);
+  const [maxBranchesCount, setMaxBranchesCount] = useState(lic?.max_branches_count ?? 2);
+  const [maxShowcaseSlots, setMaxShowcaseSlots] = useState(lic?.max_showcase_slots ?? 100);
 
   const [saving, setSaving] = useState(false);
 
@@ -1173,12 +1336,8 @@ function EditLicenseModal({ tenant, onClose, onSuccess, apiBase, token }) {
         })
       });
 
-      if (res.ok) {
-        alert("✅ Lisans ve kota limitleri başarıyla güncellendi!");
-        onSuccess();
-      } else {
-        alert("Güncelleme başarısız oldu.");
-      }
+      await requireSuccess(res);
+      onSuccess();
     } catch (err) {
       alert("Hata: " + err.message);
     } finally {
@@ -1230,6 +1389,8 @@ function EditLicenseModal({ tenant, onClose, onSuccess, apiBase, token }) {
               <label className="block text-slate-300 font-semibold mb-1">Maksimum Admin Sayısı</label>
               <input
                 type="number"
+                min="0"
+                required
                 value={maxAdminCount}
                 onChange={(e) => setMaxAdminCount(e.target.value)}
                 className="w-full bg-[#0c0e15] border border-[#273045] text-white rounded-lg p-2 text-xs font-mono font-bold"
@@ -1240,6 +1401,8 @@ function EditLicenseModal({ tenant, onClose, onSuccess, apiBase, token }) {
               <label className="block text-slate-300 font-semibold mb-1">Maksimum Personel Sayısı</label>
               <input
                 type="number"
+                min="0"
+                required
                 value={maxStaffCount}
                 onChange={(e) => setMaxStaffCount(e.target.value)}
                 className="w-full bg-[#0c0e15] border border-[#273045] text-white rounded-lg p-2 text-xs font-mono font-bold"
@@ -1252,6 +1415,8 @@ function EditLicenseModal({ tenant, onClose, onSuccess, apiBase, token }) {
               <label className="block text-slate-300 font-semibold mb-1">Maksimum Şube</label>
               <input
                 type="number"
+                min="0"
+                required
                 value={maxBranchesCount}
                 onChange={(e) => setMaxBranchesCount(e.target.value)}
                 className="w-full bg-[#0c0e15] border border-[#273045] text-white rounded-lg p-2 text-xs font-mono"
@@ -1262,6 +1427,8 @@ function EditLicenseModal({ tenant, onClose, onSuccess, apiBase, token }) {
               <label className="block text-slate-300 font-semibold mb-1">Maksimum Askı Sensörü</label>
               <input
                 type="number"
+                min="0"
+                required
                 value={maxShowcaseSlots}
                 onChange={(e) => setMaxShowcaseSlots(e.target.value)}
                 className="w-full bg-[#0c0e15] border border-[#273045] text-white rounded-lg p-2 text-xs font-mono"
@@ -1374,4 +1541,40 @@ function WelcomeCardModal({ data, onClose }) {
       </div>
     </div>
   );
+}
+
+function EditCompanyModal({ tenant, apiBase, token, onClose, onSuccess }) {
+  const fields = { company_name: 'Firma Adı', owner_name: 'Yetkili', contact_phone: 'Telefon', contact_email: 'E-posta', city: 'Şehir', tax_id: 'Vergi No / Dairesi' };
+  const [form, setForm] = useState(() => Object.fromEntries(Object.keys(fields).map(key => [key, tenant[key] || ''])));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const save = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`${apiBase}/api/v1/saas/tenants/${tenant.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form)
+      });
+      await requireSuccess(response);
+      onSuccess();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Firma Düzenle">
+    <form onSubmit={save} className="bg-[#12151f] border border-amber-500/50 rounded-2xl w-full max-w-lg shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+      <h3 className="text-white font-bold">Firma Düzenle • {tenant.company_code}</h3>
+      {Object.entries(fields).map(([key, label]) => <label key={key} className="block text-xs text-slate-300">{label}
+        <input required={key !== 'tax_id'} type={key === 'contact_email' ? 'email' : 'text'} value={form[key]}
+          onChange={event => setForm(previous => ({ ...previous, [key]: event.target.value }))}
+          className="mt-1 w-full bg-[#0c0e15] border border-[#273045] text-white rounded-lg p-2" />
+      </label>)}
+      {error && <p role="alert" className="text-rose-300 text-xs">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onClose} disabled={saving} className="btn-secondary">İptal</button>
+        <button type="submit" disabled={saving} className="btn-gold">{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
+      </div>
+    </form>
+  </div>;
 }

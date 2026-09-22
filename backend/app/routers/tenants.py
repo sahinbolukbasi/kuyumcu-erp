@@ -1,15 +1,26 @@
 import os
+import json
 import random
 import string
 import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas, auth, backup_service
 
-router = APIRouter(prefix="/api/v1/saas", tags=["Master SaaS & Lisans Yönetimi"])
+router = APIRouter(prefix="/api/v1/saas", tags=["Master SaaS & Lisans Yönetimi"], dependencies=[Depends(auth.require_master)])
+
+DEFAULT_TENANT_MODULES = {
+    "inventory": True,
+    "sales": True,
+    "crm": True,
+    "management": True,
+    "reports": True,
+    "iot": True,
+    "security": True,
+}
 
 def generate_license_key():
     """GG-LIC-2026-XXXX-YYYY formatında lisans anahtarı üretir"""
@@ -21,7 +32,7 @@ def generate_license_key():
 @router.post("/tenants", response_model=schemas.TenantCompanyOut)
 def create_tenant_company(
     data: schemas.TenantCompanyCreate,
-    current_user: Optional[models.User] = Depends(auth.get_current_user),
+
     db: Session = Depends(get_db)
 ):
     """
@@ -72,7 +83,7 @@ def create_tenant_company(
     )
     db.add(license_obj)
 
-    # 4. İlk Müşteri Admin Hesabını Aç
+    # 4. İlk Müşteri Admin Hesabını Aç ve Firma Şubesini Oluştur
     # Kullanıcı adı çakışmasını önle
     base_user = data.admin_username.strip().lower()
     existing_user = db.query(models.User).filter(models.User.username == base_user).first()
@@ -80,12 +91,25 @@ def create_tenant_company(
     if existing_user:
         final_username = f"{base_user}_{tenant.id}"
 
+    # Yeni firma için kendi şubesini oluştur (tenant_id ile)
+    new_branch = models.Branch(
+        name=f"{data.company_name.strip()} Merkez Mağaza",
+        branch_code=f"BR-{tenant.id}",
+        city=data.city.strip() if data.city else "İstanbul",
+        address="Henüz girilmedi",
+        phone=data.contact_phone.strip(),
+        tenant_id=tenant.id,
+        is_active=True
+    )
+    db.add(new_branch)
+    db.flush()
+
     first_admin = models.User(
         username=final_username,
         password_hash=auth.hash_password(data.admin_password),
         full_name=data.admin_full_name.strip(),
         role="ADMIN",
-        branch_id=1,
+        branch_id=new_branch.id,
         tenant_id=tenant.id,
         is_active=True,
         created_at=now
@@ -114,10 +138,10 @@ def create_tenant_company(
     db.add(metric)
 
     # 6. Sistem Günlüğüne Kaydet
-    creator = current_user.full_name if current_user else "Master SuperAdmin"
     log = models.SystemLog(
         level="INFO",
         module="SAAS_PROVISIONING",
+        tenant_id=tenant.id,
         message=f"Yeni firma kuruldu: {tenant.company_name} ({company_code}) - Lisans: {license_key} - İlk Admin: {final_username}"
     )
     db.add(log)
@@ -149,6 +173,8 @@ def list_tenants(
     now = datetime.datetime.utcnow()
 
     for t in tenants:
+        if t.license and t.license.status == "DELETED":
+            continue
         # Lisans kalan gün
         days_rem = 0
         if t.license and t.license.end_date:
@@ -222,7 +248,41 @@ def list_tenants(
     return results
 
 
-@router.put("/tenants/{tenant_id}/license")
+require_master = auth.require_master
+
+
+def editable_tenant(db, tenant_id):
+    tenant = db.query(models.TenantCompany).filter(models.TenantCompany.id == tenant_id).first()
+    if not tenant or (tenant.license and tenant.license.status == "DELETED"):
+        raise HTTPException(status_code=404, detail="Firma bulunamadı.")
+    return tenant
+
+
+@router.put("/tenants/{tenant_id}", dependencies=[Depends(require_master)])
+def update_tenant_company(tenant_id: int, data: schemas.TenantCompanyUpdate, db: Session = Depends(get_db)):
+    tenant = editable_tenant(db, tenant_id)
+    for key, value in data.model_dump().items():
+        value = value.strip() if isinstance(value, str) else value
+        if key != "tax_id" and not value:
+            raise HTTPException(status_code=422, detail="Firma bilgileri boş bırakılamaz.")
+        setattr(tenant, key, value)
+    db.commit()
+    return {"message": "Firma bilgileri güncellendi."}
+
+
+@router.delete("/tenants/{tenant_id}", dependencies=[Depends(require_master)])
+def delete_tenant_company(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = editable_tenant(db, tenant_id)
+    if not tenant.license:
+        raise HTTPException(status_code=409, detail="Silmeden önce firmaya lisans tanımlanmalıdır.")
+    # Finansal kayıtları koruyarak firmayı listeden ve erişimden kaldır.
+    tenant.is_active = False
+    tenant.license.status = "DELETED"
+    db.commit()
+    return {"message": "Firma silindi; geçmiş işlem kayıtları korundu."}
+
+
+@router.put("/tenants/{tenant_id}/license", dependencies=[Depends(require_master)])
 def update_tenant_license(
     tenant_id: int,
     data: schemas.TenantLicenseUpdate,
@@ -231,9 +291,13 @@ def update_tenant_license(
     """
     Lisans Yenileme, Süre Uzatma ve Kullanıcı Kotalarını (Limitleri) Güncelleme.
     """
-    lic = db.query(models.TenantLicense).filter(models.TenantLicense.tenant_id == tenant_id).first()
+    tenant = editable_tenant(db, tenant_id)
+    lic = tenant.license
     if not lic:
         raise HTTPException(status_code=404, detail="Firma lisansı bulunamadı.")
+
+    if data.status and data.status not in {"ACTIVE", "SUSPENDED", "EXPIRED", "TRIAL"}:
+        raise HTTPException(status_code=422, detail="Geçersiz lisans durumu.")
 
     if data.plan_type:
         lic.plan_type = data.plan_type
@@ -255,14 +319,16 @@ def update_tenant_license(
     if data.extend_months and data.extend_months > 0:
         base_date = lic.end_date if lic.end_date > datetime.datetime.utcnow() else datetime.datetime.utcnow()
         lic.end_date = base_date + datetime.timedelta(days=data.extend_months * 30)
-        lic.status = "ACTIVE"
+        if data.status is None:
+            lic.status = "ACTIVE"
 
+    tenant.is_active = lic.status in {"ACTIVE", "TRIAL"}
     db.commit()
     db.refresh(lic)
     return {"message": "Lisans ve kota limitleri başarıyla güncellendi.", "license_key": lic.license_key, "status": lic.status}
 
 
-@router.post("/tenants/{tenant_id}/toggle-status")
+@router.post("/tenants/{tenant_id}/toggle-status", dependencies=[Depends(require_master)])
 def toggle_tenant_status(
     tenant_id: int,
     db: Session = Depends(get_db)
@@ -270,9 +336,7 @@ def toggle_tenant_status(
     """
     Ödeme yapmayan firmanın sistemini tek tıkla askıya alma veya aktifleştirme.
     """
-    tenant = db.query(models.TenantCompany).filter(models.TenantCompany.id == tenant_id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Firma bulunamadı.")
+    tenant = editable_tenant(db, tenant_id)
 
     tenant.is_active = not tenant.is_active
     if tenant.license:
@@ -285,6 +349,49 @@ def toggle_tenant_status(
         "is_active": tenant.is_active,
         "license_status": tenant.license.status if tenant.license else "UNKNOWN"
     }
+
+
+@router.get("/tenants/{tenant_id}/modules")
+def get_tenant_modules(
+    tenant_id: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """Master HQ için belirli bir firmanın modül lisans ayarlarını getirir."""
+
+    tenant = editable_tenant(db, tenant_id)
+
+    settings = db.query(models.TenantModuleSetting).filter(
+        models.TenantModuleSetting.tenant_id == tenant_id
+    ).first()
+    stored = json.loads(settings.modules_json) if settings and settings.modules_json else {}
+    return {"tenant_id": tenant_id, "modules": {**DEFAULT_TENANT_MODULES, **stored}}
+
+
+@router.put("/tenants/{tenant_id}/modules")
+def update_tenant_modules(
+    tenant_id: int,
+    modules: dict,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """Master HQ lisans yöneticisinin firma modüllerini açıp kapatması."""
+
+    tenant = editable_tenant(db, tenant_id)
+
+    settings = db.query(models.TenantModuleSetting).filter(
+        models.TenantModuleSetting.tenant_id == tenant_id
+    ).first()
+    normalized = {
+        key: bool(modules.get(key, DEFAULT_TENANT_MODULES[key]))
+        for key in DEFAULT_TENANT_MODULES
+    }
+    if not settings:
+        settings = models.TenantModuleSetting(tenant_id=tenant_id)
+        db.add(settings)
+    settings.modules_json = json.dumps(normalized)
+    db.commit()
+    return {"tenant_id": tenant_id, "modules": normalized}
 
 
 # =========================================================================
@@ -329,11 +436,16 @@ def list_backups(
 
 
 @router.get("/backups/{file_name}/download")
-def download_backup_file(file_name: str):
+def download_backup_file(file_name: str, db: Session = Depends(get_db)):
     """
     Yedek dosyasını güvenli olarak indirir.
     """
-    file_path = os.path.join(backup_service.BACKUP_DIR, file_name)
+    from pathlib import Path
+    record = db.query(models.TenantBackupLog).filter(models.TenantBackupLog.file_name == file_name).first()
+    root = Path(backup_service.BACKUP_DIR).resolve()
+    file_path = (root / file_name).resolve()
+    if not record or file_path.parent != root:
+        raise HTTPException(404, 'Yedek bulunamadı.')
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Yedek dosyası sunucuda bulunamadı.")
     
@@ -356,6 +468,7 @@ def get_cost_analytics(
     Sistemi satan şirket için toplam bulut sunucu maliyeti, MRR/ARR ve net kârlılık.
     """
     tenants = db.query(models.TenantCompany).all()
+    tenants = [t for t in tenants if not t.license or t.license.status != "DELETED"]
     total_companies = len(tenants)
     active_licenses = 0
     expired_licenses = 0

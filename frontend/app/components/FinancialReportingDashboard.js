@@ -24,7 +24,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Sparkles,
-  Scale
+  Scale,
+  Activity,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function FinancialReportingDashboard({
@@ -35,13 +37,29 @@ export default function FinancialReportingDashboard({
   currentUser,
   onSaveDailyReport,
   onPrintReport,
-  onFastSelectSaleForEmail
+  onFastSelectSaleForEmail,
+  capitalReport,
+  criticalStock,
+  products = [],
+  customers = [],
+  systemLogs = [],
+  alerts = [],
+  branches = [],
+  onOpenNewSale
 }) {
   // Seçili Dönem Filtresi: 'TODAY' (Gün Sonu) | 'WEEK' (Haftalık) | 'MONTH' (Aylık) | 'YEAR' (Yıllık) | 'ALL' (Tümü)
   const [timeframe, setTimeframe] = useState('TODAY');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [savingReport, setSavingReport] = useState(false);
+  const [visibleWidgets, setVisibleWidgets] = useState({
+    sales: true,
+    inventory: true,
+    customers: true,
+    invoices: true,
+    system: true,
+    branches: true
+  });
 
   // Tarih Filtreleme Mantığı
   const filteredSales = useMemo(() => {
@@ -226,6 +244,36 @@ export default function FinancialReportingDashboard({
     };
   }, [summary, purchaseMetrics]);
 
+  const widgetMetrics = useMemo(() => {
+    const statusCounts = products.reduce((counts, product) => {
+      const status = product.status || 'Stokta';
+      counts[status] = (counts[status] || 0) + (product.stock_quantity || 1);
+      return counts;
+    }, {});
+    const logCounts = systemLogs.reduce((counts, log) => {
+      const level = log.level || 'INFO';
+      counts[level] = (counts[level] || 0) + 1;
+      return counts;
+    }, {});
+    const invoiceCount = salesList.filter(sale => sale.invoice_no).length;
+    const activeCustomers = customers.filter(customer => customer.is_active !== false).length;
+    const branchStock = branches.map(branch => ({
+      name: branch.name,
+      count: products.filter(product => product.branch_id === branch.id).reduce((total, product) => total + (product.stock_quantity || 1), 0)
+    }));
+    const salesByDay = filteredSales.reduce((days, sale) => {
+      const key = sale.created_at ? new Date(sale.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }) : 'Bugün';
+      days[key] = (days[key] || 0) + (parseFloat(sale.sale_price) || 0);
+      return days;
+    }, {});
+
+    return { statusCounts, logCounts, invoiceCount, activeCustomers, branchStock, salesByDay };
+  }, [products, systemLogs, salesList, customers, branches, filteredSales]);
+
+  const toggleWidget = (widgetKey) => {
+    setVisibleWidgets(prev => ({ ...prev, [widgetKey]: !prev[widgetKey] }));
+  };
+
   // Zaman başlığı etiketi
   const timeframeLabels = {
     TODAY: 'Bugün (Gün Sonu)',
@@ -340,6 +388,16 @@ export default function FinancialReportingDashboard({
         </div>
 
         <div className="flex items-center gap-2">
+          {onOpenNewSale && (
+            <button
+              type="button"
+              onClick={onOpenNewSale}
+              className="btn-gold text-xs py-1.5 px-3 flex items-center gap-1.5 font-bold"
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Yeni POS Satışı</span>
+            </button>
+          )}
           <button
             onClick={onPrintReport}
             className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 border-slate-700 text-slate-300 hover:text-white"
@@ -357,6 +415,115 @@ export default function FinancialReportingDashboard({
             <span>{savingReport ? 'Kaydediliyor...' : '💾 Dönem / Z-Raporunu Kaydet'}</span>
           </button>
         </div>
+      </div>
+
+      {/* TEK SAYFALIK YÖNETİCİ WIDGET KONTROLÜ */}
+      <div className="bg-[#12141c] border border-indigo-500/30 rounded-xl p-3.5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-xs font-bold text-white">Analiz Widget'ları</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">İhtiyacınız olmayan panelleri gizleyin, rapor görünümünü sade tutun.</div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              ['sales', 'Satış'],
+              ['inventory', 'Stok'],
+              ['customers', 'Müşteri'],
+              ['invoices', 'Fatura'],
+              ['system', 'Sistem'],
+              ['branches', 'Şube']
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleWidget(key)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${visibleWidgets[key] ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' : 'bg-slate-900 text-slate-500 border-slate-700'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* GENEL DURUM WIDGET'LARI */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {visibleWidgets.sales && (
+          <div className="p-4 rounded-xl bg-[#12141c] border border-amber-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-white flex items-center gap-2"><Activity className="w-4 h-4 text-amber-400" /> Satış Trendi</h3>
+              <span className="text-[10px] text-slate-500">{timeframeLabels[timeframe]}</span>
+            </div>
+            <div className="flex items-end gap-1 h-24">
+              {Object.entries(widgetMetrics.salesByDay).slice(-14).map(([day, amount]) => {
+                const maxAmount = Math.max(...Object.values(widgetMetrics.salesByDay), 1);
+                return (
+                  <div key={day} className="flex-1 h-full flex flex-col justify-end items-center gap-1" title={`${day}: ${amount.toLocaleString('tr-TR')} ₺`}>
+                    <div className="w-full bg-gradient-to-t from-amber-600 to-yellow-300 rounded-t" style={{ height: `${Math.max(6, (amount / maxAmount) * 100)}%` }} />
+                    <span className="text-[8px] text-slate-500 rotate-45">{day}</span>
+                  </div>
+                );
+              })}
+              {Object.keys(widgetMetrics.salesByDay).length === 0 && <span className="text-xs text-slate-500 m-auto">Seçilen dönemde satış yok.</span>}
+            </div>
+          </div>
+        )}
+
+        {visibleWidgets.inventory && (
+          <div className="p-4 rounded-xl bg-[#12141c] border border-emerald-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-white flex items-center gap-2"><Coins className="w-4 h-4 text-emerald-400" /> Stok & Sermaye</h3>
+              <span className="text-lg font-bold text-amber-400">{Number(capitalReport?.total_capital_tl || 0).toLocaleString('tr-TR')} ₺</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-[#0e1017] rounded-lg p-2"><span className="text-slate-500 block">Toplam Ürün</span><strong className="text-white">{products.length}</strong></div>
+              <div className="bg-[#0e1017] rounded-lg p-2"><span className="text-slate-500 block">Kritik Stok</span><strong className="text-rose-300">{criticalStock?.suggested_products?.length || 0}</strong></div>
+              <div className="bg-[#0e1017] rounded-lg p-2"><span className="text-slate-500 block">Has Altın</span><strong className="text-amber-300">{Number(capitalReport?.total_has_grams || 0).toFixed(2)} gr</strong></div>
+              <div className="bg-[#0e1017] rounded-lg p-2"><span className="text-slate-500 block">Kasa Rezervi</span><strong className="text-sky-300">{Number(capitalReport?.vault_capital_tl || 0).toLocaleString('tr-TR')} ₺</strong></div>
+            </div>
+          </div>
+        )}
+
+        {visibleWidgets.customers && (
+          <div className="p-4 rounded-xl bg-[#12141c] border border-cyan-500/30 space-y-3">
+            <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-white flex items-center gap-2"><Users className="w-4 h-4 text-cyan-400" /> Anlık Müşteri</h3><span className="text-[10px] text-emerald-400">CRM canlı</span></div>
+            <div className="text-3xl font-bold text-cyan-300">{widgetMetrics.activeCustomers}</div>
+            <div className="text-xs text-slate-400">Aktif müşteri kaydı</div>
+            <div className="text-xs text-slate-300 border-t border-[#242938] pt-2">Bu dönem işlem gören müşteri: <strong className="text-white">{new Set(filteredSales.map(sale => sale.customer_name).filter(Boolean)).size}</strong></div>
+          </div>
+        )}
+
+        {visibleWidgets.invoices && (
+          <div className="p-4 rounded-xl bg-[#12141c] border border-indigo-500/30 space-y-3">
+            <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-white flex items-center gap-2"><FileText className="w-4 h-4 text-indigo-400" /> Fatura Raporu</h3><span className="text-[10px] text-slate-500">e-Fatura / e-Arşiv</span></div>
+            <div className="text-3xl font-bold text-indigo-300">{widgetMetrics.invoiceCount}</div>
+            <div className="text-xs text-slate-400">Fatura numarası oluşmuş satış</div>
+            <div className="text-xs text-slate-300 border-t border-[#242938] pt-2">Toplam işlem: <strong className="text-white">{salesList.length}</strong></div>
+          </div>
+        )}
+
+        {visibleWidgets.system && (
+          <div className="p-4 rounded-xl bg-[#12141c] border border-rose-500/30 space-y-3">
+            <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-white flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-rose-400" /> Sistem Takibi</h3><span className="text-[10px] text-slate-500">Son kayıtlar</span></div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div><strong className="text-white block text-lg">{systemLogs.length}</strong><span className="text-slate-500">Log</span></div>
+              <div><strong className="text-rose-300 block text-lg">{alerts.length}</strong><span className="text-slate-500">Alarm</span></div>
+              <div><strong className="text-emerald-300 block text-lg">{widgetMetrics.logCounts.INFO || 0}</strong><span className="text-slate-500">Bilgi</span></div>
+            </div>
+          </div>
+        )}
+
+        {visibleWidgets.branches && (
+          <div className="p-4 rounded-xl bg-[#12141c] border border-sky-500/30 space-y-3">
+            <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-white flex items-center gap-2"><BarChart3 className="w-4 h-4 text-sky-400" /> Şube Stokları</h3><span className="text-[10px] text-slate-500">{branches.length} şube</span></div>
+            <div className="space-y-2">
+              {widgetMetrics.branchStock.slice(0, 5).map(branch => {
+                const maxStock = Math.max(...widgetMetrics.branchStock.map(item => item.count), 1);
+                return <div key={branch.name}><div className="flex justify-between text-[11px] text-slate-300"><span>{branch.name}</span><strong>{branch.count}</strong></div><div className="h-1.5 bg-[#0e1017] rounded-full mt-1"><div className="h-full bg-sky-400 rounded-full" style={{ width: `${Math.max(4, (branch.count / maxStock) * 100)}%` }} /></div></div>;
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 5 TEMEL FİNANSAL KPI KARTI */}

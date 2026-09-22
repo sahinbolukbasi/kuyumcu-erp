@@ -49,6 +49,9 @@ export default function PatronAnalyticsDashboard({
   });
 
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const serviceStats = Array.isArray(serviceAnalytics)
+    ? serviceAnalytics
+    : (serviceAnalytics?.staff_stats || []);
 
   // Widget Açma / Kapatma Fonksiyonu
   const toggleWidget = (key) => {
@@ -276,7 +279,7 @@ export default function PatronAnalyticsDashboard({
               </thead>
               <tbody className="divide-y divide-[#202534]">
                 {staffPerformance.map(st => {
-                  const srv = serviceAnalytics.find(s => s.user_id === st.user_id);
+                  const srv = serviceStats.find(s => s.user_id === st.user_id);
                   const servedCount = srv?.total_customers_served || (st.total_sales_count * 2) || 0;
                   const conversionRate = servedCount > 0 ? Math.min(100, Math.round((st.total_sales_count / servedCount) * 100)) : 0;
 

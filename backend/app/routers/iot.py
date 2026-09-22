@@ -2,7 +2,7 @@ import datetime
 import json
 import itertools
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
+from fastapi import Request, APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from ..database import get_db
@@ -53,6 +53,7 @@ def identify_lift_candidates(
     slot_id: int,
     weight_lost: Optional[float] = Query(None),
     payload: Optional[dict] = Body(None),
+    current_user: models.User = Depends(auth.require_alarm_manager),
     db: Session = Depends(get_db)
 ):
     """Askıdan ağırlık eksildiğinde o askıdaki modeller arasından eksilen gramaja en uygun olanları listeleme"""
@@ -347,7 +348,7 @@ async def take_into_custody(
     db.refresh(slot)
 
     # WebSocket ile anons et
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "CUSTODY_TAKEN",
         "product_id": target_product.id,
         "product_name": target_product.name,
@@ -450,7 +451,7 @@ async def return_to_rack(
     db.commit()
     db.refresh(slot)
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "CUSTODY_RETURNED",
         "product_id": target_p.id,
         "product_name": target_p.name,
@@ -533,7 +534,7 @@ async def assign_product_to_slot(
     db.add(log)
     db.commit()
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "SLOT_ASSIGNED",
         "slot_number": slot.slot_number,
         "slot_id": slot.id,
@@ -550,11 +551,16 @@ def create_slot(
     admin: models.User = Depends(auth.require_admin),
     db: Session = Depends(get_db)
 ):
+    auth.ensure_slot_quota(db, admin.tenant_id or 1)
+    branch = db.query(models.Branch).filter(models.Branch.tenant_id == (admin.tenant_id or 1), models.Branch.is_active == True).order_by(models.Branch.id).first()
+    if not branch:
+        raise HTTPException(status_code=400, detail="Önce firmaya aktif bir şube ekleyiniz.")
     existing = db.query(models.RackSlot).filter(models.RackSlot.slot_number == slot_in.slot_number).first()
     if existing:
         raise HTTPException(status_code=400, detail="Bu slot numarası ile kayıtlı bir cihaz zaten var.")
 
     slot = models.RackSlot(
+        branch_id=branch.id,
         slot_number=slot_in.slot_number,
         label=slot_in.label,
         slot_type=slot_in.slot_type or "Askı",
@@ -622,7 +628,7 @@ async def update_slot_device_config(
     db.commit()
     db.refresh(slot)
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "SLOT_UPDATED",
         "slot_id": slot.id,
         "slot_number": slot.slot_number,
@@ -661,7 +667,7 @@ async def toggle_slot_active(
     db.commit()
     db.refresh(slot)
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "SLOT_UPDATED",
         "slot_id": slot.id,
         "slot_number": slot.slot_number,
@@ -709,7 +715,7 @@ async def delete_slot(
     db.delete(slot)
     db.commit()
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "SLOT_DELETED",
         "slot_id": slot_id,
         "slot_number": slot_no
@@ -745,20 +751,34 @@ async def ping_device_by_ip(
             "message": f"#{slot.slot_number} cihazı için geçerli bir IP adresi tanımlanmamış."
         }
 
+    import ipaddress
+    import os
+    try:
+        address = ipaddress.ip_address(target_ip)
+        networks = [ipaddress.ip_network(c.strip()) for c in os.getenv('IOT_ALLOWED_CIDRS', '').split(',') if c.strip()]
+        allowed = not (address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified) and any(address in network for network in networks)
+    except ValueError:
+        allowed = False
+    if not allowed or not 1 <= target_port <= 65535:
+        raise HTTPException(403, 'Cihaz IP adresi yöneticinin izin verdiği ağlarda değil.')
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            raise HTTPException(403, 'Cihaz yönlendirmeleri kabul edilmez.')
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     device_url = f"http://{target_ip}:{target_port}/api/status"
     t_start = time.time()
     
     try:
         req = urllib.request.Request(device_url, headers={"User-Agent": "SarrafErdem-ERP/PingTool"})
-        with urllib.request.urlopen(req, timeout=2.5) as res:
+        with opener.open(req, timeout=2.5) as res:
             latency = int((time.time() - t_start) * 1000)
             if res.status == 200:
-                raw_json = json.loads(res.read().decode("utf-8"))
+                raw_json = json.loads(res.read(65537).decode("utf-8"))
                 slot.is_online = True
                 slot.last_ping = datetime.datetime.utcnow()
                 db.commit()
                 
-                await iot_service.manager.broadcast({
+                await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
                     "type": "DEVICE_PINGED",
                     "slot_id": slot.id,
                     "slot_number": slot.slot_number,
@@ -779,7 +799,7 @@ async def ping_device_by_ip(
         slot.is_online = False
         db.commit()
         
-        await iot_service.manager.broadcast({
+        await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
             "type": "DEVICE_PINGED",
             "slot_id": slot.id,
             "slot_number": slot.slot_number,
@@ -798,7 +818,13 @@ async def ping_device_by_ip(
 
 
 @router.post("/telemetry")
-async def receive_telemetry(payload: schemas.TelemetryPayload, db: Session = Depends(get_db)):
+async def receive_telemetry(payload: schemas.TelemetryPayload, request: Request, db: Session = Depends(get_db), _=Depends(auth.require_iot_access)):
+    expected = getattr(request.state, 'device_id', None)
+    if expected and payload.device_id != expected:
+        raise HTTPException(403, 'Cihaz anahtarı bu cihaza ait değil.')
+    slot = db.query(models.RackSlot).filter(models.RackSlot.slot_number == payload.slot_number).first()
+    if not slot or slot.device_id != payload.device_id:
+        raise HTTPException(404, 'Cihaza atanmış askı bulunamadı.')
     result = await iot_service.process_telemetry(
         db=db,
         slot_number=payload.slot_number,
@@ -852,7 +878,7 @@ def get_demand_analytics(db: Session = Depends(get_db)):
 
 
 @router.post("/slots/{slot_id}/authorize-inspection")
-async def authorize_inspection(slot_id: int, req: schemas.SetAuthorizedInspectionRequest, db: Session = Depends(get_db)):
+async def authorize_inspection(slot_id: int, req: schemas.SetAuthorizedInspectionRequest, current_user: models.User = Depends(auth.require_alarm_manager), db: Session = Depends(get_db)):
     slot = db.query(models.RackSlot).filter(models.RackSlot.id == slot_id).first()
     if not slot:
         raise HTTPException(status_code=404, detail="Askı bulunamadı")
@@ -860,7 +886,7 @@ async def authorize_inspection(slot_id: int, req: schemas.SetAuthorizedInspectio
     slot.is_inspection_authorized = req.authorized
     db.commit()
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "INSPECTION_AUTH_CHANGED",
         "slot_number": slot.slot_number,
         "is_inspection_authorized": slot.is_inspection_authorized
@@ -892,7 +918,7 @@ async def calibrate_slot(
     db.add(log)
     db.commit()
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "SLOT_CALIBRATED",
         "slot_number": slot.slot_number,
         "expected_weight": slot.expected_weight,
@@ -903,7 +929,7 @@ async def calibrate_slot(
 
 
 @router.get("/alerts", response_model=List[schemas.SecurityAlertOut])
-def list_alerts(unresolved_only: bool = False, db: Session = Depends(get_db)):
+def list_alerts(unresolved_only: bool = False, current_user: models.User = Depends(auth.require_alarm_manager), db: Session = Depends(get_db)):
     query = db.query(models.SecurityAlert)
     if unresolved_only:
         query = query.filter(models.SecurityAlert.is_resolved == False)
@@ -914,7 +940,7 @@ def list_alerts(unresolved_only: bool = False, db: Session = Depends(get_db)):
 async def resolve_alert(
     alert_id: int,
     resolved_by: str = Body("Personel", embed=True),
-    current_user: Optional[models.User] = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.require_alarm_manager),
     db: Session = Depends(get_db)
 ):
     alert = db.query(models.SecurityAlert).filter(models.SecurityAlert.id == alert_id).first()
@@ -941,7 +967,7 @@ async def resolve_alert(
     db.add(log)
     db.commit()
 
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "ALERT_RESOLVED",
         "alert_id": alert.id,
         "slot_id": slot.id if slot else None,
@@ -955,7 +981,7 @@ async def resolve_alert(
 async def acknowledge_and_reset_alarm(
     alert_id: int,
     notes: Optional[str] = Body(None, embed=True),
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.require_alarm_manager),
     db: Session = Depends(get_db)
 ):
     """Kritik İşlem: Yetkili personelin onayıyla eksik gramaj kayıp olarak işlenir, vitrin sensörü mevcut ağırlığa sıfırlanır ve alarm kapatılır."""
@@ -1006,7 +1032,7 @@ async def acknowledge_and_reset_alarm(
     db.commit()
 
     # Tüm ekranları eski normal haline döndürmek için broadcast et
-    await iot_service.manager.broadcast({
+    await iot_service.manager.broadcast({"tenant_id": db.info.get("tenant_id"),
         "type": "ALERT_RESOLVED",
         "alert_id": alert.id,
         "slot_id": slot.id if slot else None,
