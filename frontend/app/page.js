@@ -123,6 +123,7 @@ export default function Home() {
   const [token, setToken] = useState(null);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [selectedLoginRole, setSelectedLoginRole] = useState('admin'); // 'admin' veya 'staff'
   const [loginError, setLoginError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -2617,11 +2618,11 @@ export default function Home() {
                 {/* Rol Seçimi */}
                 <div className="grid grid-cols-2 p-1.5 rounded-xl border mb-8 gap-1.5" style={{background:'#07080a',borderColor:'rgba(255,255,255,0.10)'}}>
                   {(['admin','staff']).map((roleKey) => {
-                    const isAdmin = ['admin','selim_mudur'].includes(loginUsername);
-                    const selected = roleKey === 'admin' ? isAdmin : !isAdmin;
+                    const selected = roleKey === selectedLoginRole;
                     return (
                       <button key={roleKey} type="button"
                         onClick={() => {
+                          setSelectedLoginRole(roleKey);
                           setLoginUsername('');
                           setLoginPassword(''); // ⛔ Hiçbir bilgi otomatik gelmez
                         }}
@@ -2635,18 +2636,18 @@ export default function Home() {
                 </div>
                 {/* Rol Banner */}
                 <div className="mb-6 p-3.5 rounded-xl border flex items-start gap-3"
-                  style={['admin','selim_mudur'].includes(loginUsername)
+                  style={selectedLoginRole === 'admin'
                     ? {background:'rgba(212,175,55,0.10)',borderColor:'rgba(212,175,55,0.25)'}
                     : {background:'rgba(30,41,59,0.60)',borderColor:'rgba(255,255,255,0.10)'}}>
                   <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{background:'rgba(212,175,55,0.20)',color:'#d4af37'}}>
                     <ShieldCheck className="w-4 h-4"/>
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold" style={{color:['admin','selim_mudur'].includes(loginUsername)?'#f6e08c':'#fff'}}>
-                      {['admin','selim_mudur'].includes(loginUsername) ? 'YÖNETİCİ & ERP TAM ERİŞİMİ (ERDEM SARRAF)' : 'SATIŞ DANIŞMANI & KASA PERSONELİ ERİŞİMİ'}
+                    <h4 className="text-xs font-bold" style={{color:selectedLoginRole === 'admin'?'#f6e08c':'#fff'}}>
+                      {selectedLoginRole === 'admin' ? 'YÖNETİCİ & ERP TAM ERİŞİMİ (ERDEM SARRAF)' : 'SATIŞ DANIŞMANI & KASA PERSONELİ ERİŞİMİ'}
                     </h4>
                     <p className="text-[11px] text-slate-300 mt-0.5">
-                      {['admin','selim_mudur'].includes(loginUsername)
+                      {selectedLoginRole === 'admin'
                         ? 'Kasa devri, vitrin askı alarmlarını susturma, personel satış primleri ve BİST fiyat marjı düzenleme yetkisi.'
                         : 'Ürün sunumu, vitrinden mücevher inceleme çıkarma, anlık POS satış fişi kesme ve hurda altın hesaplama modu.'}
                     </p>
@@ -2698,7 +2699,7 @@ export default function Home() {
                       <ShieldCheck className="w-4 h-4" style={{color:'#07080a'}}/>
                       <span>
                         {authLoading ? 'Doğrulanıyor...' :
-                          ['admin','selim_mudur'].includes(loginUsername) ? 'GÜVENLİ YÖNETİCİ GİRİŞİ YAP' : 'DANIŞMAN TERMİNALİNE GİRİŞ YAP'}
+                          selectedLoginRole === 'admin' ? 'GÜVENLİ YÖNETİCİ GİRİŞİ YAP' : 'DANIŞMAN TERMİNALİNE GİRİŞ YAP'}
                       </span>
                     </button>
                   </div>
